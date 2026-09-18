@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HOME = Path.home()
+
+WALLPAPERS = {
+    "focus":  HOME / "wallpapers/niri/focus.jpeg",
+    "record": HOME / "wallpapers/niri/record.jpeg",
+    "code":   HOME / "wallpapers/niri/code.jpeg",
+    "games":  HOME / "wallpapers/niri/games.jpeg",
+}
+
+DEFAULT = HOME / "wallpapers/unicode.jpeg"
+
+last_wallpaper = None
+
+
+def run(cmd):
+    return subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+
+
+def swww_cmd():
+    if run(["bash", "-lc", "command -v swww"]).returncode == 0:
+        return "swww"
+    if run(["bash", "-lc", "command -v awww"]).returncode == 0:
+        return "awww"
+    print("Neither swww nor awww found.", file=sys.stderr)
+    sys.exit(1)
+
+
+SWWW = swww_cmd()
+
+
+def ensure_daemon():
+    if run([SWWW, "query"]).returncode == 0:
+        return
+
+    daemon = "swww-daemon" if SWWW == "swww" else "awww-daemon"
+    subprocess.Popen(
+        [daemon],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    time.sleep(0.7)
+
+
+def set_wallpaper_for_workspace(name):
+    global last_wallpaper
+
+    path = WALLPAPERS.get(name, DEFAULT)
+
+    if not path.exists():
+        path = DEFAULT
+
+    path = str(path)
+
+    if path == last_wallpaper:
+        return
+
+    subprocess.run([
+        SWWW,
+        "img",
+        path,
+        "--transition-type",
+        "simple",
+        "--transition-duration",
+        "0.25",
+        "--resize",
+        "crop",
+    ])
+
+    last_wallpaper = path
+
+
+def focused_workspace_name():
+    result = run(["niri", "msg", "--json", "workspaces"])
+
+    if result.returncode != 0:
+        return None
+
+    try:
+        workspaces = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+    for ws in workspaces:
+        if ws.get("is_focused"):
+            return ws.get("name") or str(ws.get("idx"))
+
+    return None
+
+
+def workspace_name_by_id(workspace_id):
+    result = run(["niri", "msg", "--json", "workspaces"])
+
+    if result.returncode != 0:
+        return None
+
+    try:
+        workspaces = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+    for ws in workspaces:
+        if ws.get("id") == workspace_id:
+            return ws.get("name") or str(ws.get("idx"))
+
+    return None
+
+
+def main():
+    ensure_daemon()
+
+    name = focused_workspace_name()
+    if name:
+        set_wallpaper_for_workspace(name)
+
+    stream = subprocess.Popen(
+        ["niri", "msg", "--json", "event-stream"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        bufsize=1,
+    )
+
+    for line in stream.stdout:
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        if "WorkspaceActivated" in event:
+            workspace_id = event["WorkspaceActivated"].get("id")
+            name = workspace_name_by_id(workspace_id)
+            if name:
+                set_wallpaper_for_workspace(name)
+
+        elif "WorkspacesChanged" in event:
+            for ws in event["WorkspacesChanged"].get("workspaces", []):
+                if ws.get("is_focused"):
+                    name = ws.get("name") or str(ws.get("idx"))
+                    set_wallpaper_for_workspace(name)
+
+
+if __name__ == "__main__":
+    main()

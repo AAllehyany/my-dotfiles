@@ -1,0 +1,23 @@
+[
+  {
+    "name": "Shadowverse WB — record",
+    "game_id": "2584990",
+    "workspace": "record",
+    "width": 2200,
+    "title": "ShadowverseWB"
+  },
+  {
+    "name": "Master Duel — record",
+    "game_id": "1449850",
+    "workspace": "record",
+    "width": 2200,
+    "title": "masterduel"
+  },
+  {
+    "name": "Overwatch — games 1080p",
+    "game_id": "2357570",
+    "workspace": "games",
+    "width": 1920,
+    "title": "Overwatch"
+  }
+]

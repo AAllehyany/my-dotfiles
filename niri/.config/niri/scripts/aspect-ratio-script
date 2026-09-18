@@ -1,0 +1,323 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import shutil
+import subprocess
+import sys
+from fractions import Fraction
+from typing import Any
+
+
+def run(
+    *args: str,
+    check: bool = True,
+    capture_output: bool = False,
+) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        args,
+        check=check,
+        text=True,
+        capture_output=capture_output,
+    )
+
+
+def niri_action(*args: str, check: bool = True) -> None:
+    run("niri", "msg", "action", *args, check=check)
+
+
+def notify(title: str, body: str) -> None:
+    if shutil.which("notify-send"):
+        subprocess.run(["notify-send", title, body], check=False)
+    else:
+        print(f"{title}: {body}", file=sys.stderr)
+
+
+def niri_json(*args: str) -> Any:
+    result = run(
+        "niri",
+        "msg",
+        "--json",
+        *args,
+        check=True,
+        capture_output=True,
+    )
+    return json.loads(result.stdout)
+
+
+def unwrap_response(data: Any, key: str | None = None) -> Any:
+    if isinstance(data, dict) and "Ok" in data:
+        data = data["Ok"]
+
+    if key and isinstance(data, dict) and key in data:
+        return data[key]
+
+    return data
+
+
+def as_list_response(data: Any, key: str) -> list[dict[str, Any]]:
+    data = unwrap_response(data, key)
+
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+
+    if isinstance(data, dict) and isinstance(data.get(key), list):
+        return [item for item in data[key] if isinstance(item, dict)]
+
+    return []
+
+
+def get_windows() -> list[dict[str, Any]]:
+    return as_list_response(niri_json("windows"), "Windows")
+
+
+def get_workspaces() -> list[dict[str, Any]]:
+    return as_list_response(niri_json("workspaces"), "Workspaces")
+
+
+def get_outputs() -> list[dict[str, Any]]:
+    return as_list_response(niri_json("outputs"), "Outputs")
+
+
+def get_focused_window() -> dict[str, Any] | None:
+    for window in get_windows():
+        if window.get("is_focused") or window.get("is-focused"):
+            return window
+
+    return None
+
+
+def get_focused_output() -> dict[str, Any] | None:
+    try:
+        output = unwrap_response(niri_json("focused-output"), "FocusedOutput")
+    except subprocess.CalledProcessError:
+        return None
+
+    if isinstance(output, dict) and isinstance(output.get("logical"), dict):
+        return output
+
+    return None
+
+
+def get_output_for_window(window: dict[str, Any]) -> dict[str, Any] | None:
+    focused_output = get_focused_output()
+
+    if focused_output is not None:
+        return focused_output
+
+    workspace_id = window.get("workspace_id") or window.get("workspace-id")
+
+    if workspace_id is None:
+        return None
+
+    output_name: str | None = None
+
+    for workspace in get_workspaces():
+        if workspace.get("id") == workspace_id:
+            output_name = workspace.get("output")
+            break
+
+    if output_name is None:
+        return None
+
+    for output in get_outputs():
+        if output.get("name") == output_name:
+            return output
+
+    return None
+
+
+def get_output_size(output: dict[str, Any]) -> tuple[int, int] | None:
+    logical = output.get("logical")
+
+    if not isinstance(logical, dict):
+        return None
+
+    width = logical.get("width")
+    height = logical.get("height")
+
+    if isinstance(width, (int, float)) and isinstance(height, (int, float)):
+        return int(width), int(height)
+
+    return None
+
+
+def get_window_width(window: dict[str, Any]) -> int | None:
+    layout = window.get("layout")
+
+    if not isinstance(layout, dict):
+        return None
+
+    size = layout.get("window_size") or layout.get("window-size")
+
+    if (
+        isinstance(size, list)
+        and len(size) >= 1
+        and isinstance(size[0], (int, float))
+    ):
+        return int(size[0])
+
+    return None
+
+
+def parse_aspect_ratio(raw: str) -> Fraction:
+    raw = raw.strip()
+
+    if ":" in raw:
+        left, right = raw.split(":", 1)
+        ratio = Fraction(left.strip()) / Fraction(right.strip())
+    else:
+        ratio = Fraction(raw)
+
+    if ratio <= 0:
+        raise ValueError("Aspect ratio must be positive.")
+
+    return ratio
+
+
+def rounded_int(value: Fraction) -> int:
+    return (value.numerator + value.denominator // 2) // value.denominator
+
+
+def positive_int_or_none(value: int | None, name: str) -> int | None:
+    if value is not None and value <= 0:
+        raise ValueError(f"{name} must be positive.")
+
+    return value
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="aspect-ratio-script",
+        description="Resize the focused niri window to an aspect ratio.",
+    )
+
+    parser.add_argument(
+        "aspect_ratio",
+        help='Aspect ratio, for example "16:9", "4:3", "1:1", or "21:9".',
+    )
+
+    parser.add_argument(
+        "--height-only",
+        action="store_true",
+        help="Only change height from the current width. This may exceed the screen.",
+    )
+
+    parser.add_argument(
+        "--max-width",
+        type=int,
+        default=None,
+        help="Override detected maximum width.",
+    )
+
+    parser.add_argument(
+        "--max-height",
+        type=int,
+        default=None,
+        help="Override detected maximum height.",
+    )
+
+    parser.add_argument(
+        "--horizontal-padding",
+        type=int,
+        default=0,
+        help="Subtract this many total pixels from detected output width.",
+    )
+
+    parser.add_argument(
+        "--vertical-padding",
+        type=int,
+        default=0,
+        help="Subtract this many total pixels from detected output height.",
+    )
+
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+
+    try:
+        aspect_ratio = parse_aspect_ratio(args.aspect_ratio)
+        positive_int_or_none(args.max_width, "--max-width")
+        positive_int_or_none(args.max_height, "--max-height")
+
+        if args.horizontal_padding < 0:
+            raise ValueError("--horizontal-padding cannot be negative.")
+
+        if args.vertical_padding < 0:
+            raise ValueError("--vertical-padding cannot be negative.")
+
+    except ValueError as error:
+        print(f"Invalid argument: {error}", file=sys.stderr)
+        raise SystemExit(2)
+
+    try:
+        focused = get_focused_window()
+
+        if focused is None:
+            notify("niri aspect ratio", "Could not find the focused window.")
+            raise SystemExit(1)
+
+        current_width = get_window_width(focused)
+
+        if current_width is None or current_width <= 0:
+            notify("niri aspect ratio", "Could not read the focused window width.")
+            raise SystemExit(1)
+
+        if args.height_only:
+            target_height = rounded_int(Fraction(current_width, 1) / aspect_ratio)
+            niri_action("set-window-height", str(target_height))
+            return
+
+        output = get_output_for_window(focused)
+        output_size = get_output_size(output) if output is not None else None
+
+        if output_size is None and (args.max_width is None or args.max_height is None):
+            notify(
+                "niri aspect ratio",
+                "Could not detect output size. Use --max-width and --max-height.",
+            )
+            raise SystemExit(1)
+
+        detected_max_width, detected_max_height = output_size or (0, 0)
+
+        max_width = args.max_width or detected_max_width - args.horizontal_padding
+        max_height = args.max_height or detected_max_height - args.vertical_padding
+
+        if max_width <= 0 or max_height <= 0:
+            notify("niri aspect ratio", "Calculated max size is invalid.")
+            raise SystemExit(1)
+
+        # Start from the current width, but never exceed the detected/overridden max width.
+        target_width = min(current_width, max_width)
+
+        # If that width would make the window too tall, shrink width too.
+        height_from_width = rounded_int(Fraction(target_width, 1) / aspect_ratio)
+
+        if height_from_width > max_height:
+            target_height = max_height
+            target_width = int(Fraction(max_height, 1) * aspect_ratio)
+        else:
+            target_height = height_from_width
+
+        # Final safety clamp.
+        if target_width > max_width:
+            target_width = max_width
+            target_height = rounded_int(Fraction(target_width, 1) / aspect_ratio)
+
+        if target_height > max_height:
+            target_height = max_height
+
+        if target_width != current_width:
+            niri_action("set-column-width", str(target_width))
+
+        niri_action("set-window-height", str(target_height))
+
+    except subprocess.CalledProcessError as error:
+        notify("niri aspect ratio", f"Command failed: {' '.join(error.cmd)}")
+        raise SystemExit(error.returncode)
+
+
+if __name__ == "__main__":
+    main()

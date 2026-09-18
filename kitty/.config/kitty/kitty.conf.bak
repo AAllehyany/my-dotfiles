@@ -1,0 +1,18 @@
+auto_reload_config 0.1
+
+# BEGIN_KITTY_THEME
+# Rosé Pine Moon
+include current-theme.conf
+# END_KITTY_THEME
+font_family MonoLisa
+font_size 13.0
+
+background_blur 3
+background_opacity 0.86
+dynamic_background_opacity yes
+
+active_border_color #f6c177
+inactive_border_color #6e6a86
+cursor #f6c177
+background #050403
+foreground #eee8da

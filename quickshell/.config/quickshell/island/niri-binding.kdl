@@ -1,0 +1,3 @@
+// Merge this entry into your existing binds { ... } block.
+// The config is installed as ~/.config/quickshell/island.
+Mod+C repeat=false { spawn "qs" "-c" "island" "ipc" "call" "island" "toggle"; }
