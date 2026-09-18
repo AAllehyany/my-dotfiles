@@ -8,6 +8,7 @@ import qs.theme
 IslandPage {
     id: root
     signal passwordPageRequested(var network)
+    signal enterprisePageRequested(var network)
     title: "Wi-Fi Networks"
 
     empty:
@@ -159,9 +160,17 @@ delegate: Rectangle {
                     Layout.minimumWidth: 0
                     Layout.alignment: Qt.AlignVCenter
 
-                    text: (modelData.connected ? "> " : "  ")
-                        + modelData.name
-                        + (Wifi.needsPsk(modelData) ? " // LOCK" : "")
+text: (modelData.connected ? "> " : "  ")
+    + modelData.name
+    + (
+        Wifi.needsEnterpriseAuth(modelData)
+            ? " // 802.1X"
+            : Wifi.needsPsk(modelData)
+                ? " // LOCK"
+                : Wifi.needsLegacyAuth(modelData)
+                    ? " // LEGACY"
+                    : ""
+    )
 
                     color: modelData.connected
                         ? Theme.accent
@@ -192,19 +201,32 @@ delegate: Rectangle {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
 
-                onClicked: {
-                    if (modelData.connected) {
-                        Wifi.disconnectNetwork(modelData);
-                        return;
-                    }
+onClicked: {
+    if (modelData.connected) {
+        Wifi.disconnectNetwork(modelData);
+        return;
+    }
 
-                    if (Wifi.needsPsk(modelData)) {
-                        root.passwordPageRequested(modelData);
-                        return;
-                    }
+    if (Wifi.needsEnterpriseAuth(modelData)) {
+        root.enterprisePageRequested(modelData);
+        return;
+    }
 
-                    Wifi.connectNetwork(modelData);
-                }
+    if (Wifi.needsPsk(modelData)) {
+        root.passwordPageRequested(modelData);
+        return;
+    }
+
+    if (Wifi.needsLegacyAuth(modelData)) {
+        console.warn(
+            "Legacy Wi-Fi authentication is not supported yet:",
+            modelData.name
+        );
+        return;
+    }
+
+    Wifi.connectNetwork(modelData);
+}
             }
         }
 

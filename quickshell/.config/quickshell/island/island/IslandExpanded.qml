@@ -76,22 +76,25 @@ Item {
         }
     }
 
-    Component {
-        id: wifiPasswordPage
+Component {
+    id: wifiPasswordPage
 
-        WifiPasswordPage {
-            network: root.wifiPasswordNetwork
+    WifiPasswordPage {
+        network: root.wifiPasswordNetwork
 
-            onBackRequested: {
-                navigator.goBack();
-            }
+        onBackRequested: {
+            navigator.goBack();
+        }
 
-            onConnectRequested: (network, password) => {
-                Wifi.connectWithPsk(network, password);
-                navigator.goBack();
-            }
+        onConnectRequested: (network, password) => {
+            Wifi.connectWithPsk(network, password);
+        }
+
+        onConnectionSucceeded: {
+            navigator.goBack();
         }
     }
+}
 
     Component {
         id: bluetoothPage

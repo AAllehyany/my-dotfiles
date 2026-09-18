@@ -31,11 +31,9 @@ Singleton {
         if (!root.device)
             return null;
 
-        const network = root.device.networks.values.find(
+        return root.device.networks.values.find(
             network => network.connected
-        );
-
-        return network ?? null;
+        ) ?? null;
     }
 
     readonly property string connectedName:
@@ -74,6 +72,9 @@ Singleton {
         if (!root.device)
             return;
 
+        if (root.device.scannerEnabled === scanning)
+            return;
+
         root.device.scannerEnabled = scanning;
     }
 
@@ -90,25 +91,64 @@ Singleton {
 
         network.disconnect();
     }
+
     function forgetNetwork(network): void {
         if (!network || !network.known)
             return;
 
         network.forget();
     }
-    function supportsPsk(network): bool {
-        if (!network)
-            return false;
 
-        return network.security === WifiSecurityType.WpaPsk
-            || network.security === WifiSecurityType.Wpa2Psk
-            || network.security === WifiSecurityType.Sae;
+    function authKind(network): string {
+        if (!network)
+            return "unknown";
+
+        switch (network.security) {
+        case WifiSecurityType.Open:
+        case WifiSecurityType.Owe:
+            return "open";
+
+        case WifiSecurityType.WpaPsk:
+        case WifiSecurityType.Wpa2Psk:
+        case WifiSecurityType.Sae:
+            return "personal";
+
+        case WifiSecurityType.WpaEap:
+        case WifiSecurityType.Wpa2Eap:
+        case WifiSecurityType.Wpa3SuiteB192:
+            return "enterprise";
+
+        case WifiSecurityType.StaticWep:
+        case WifiSecurityType.DynamicWep:
+        case WifiSecurityType.Leap:
+            return "legacy";
+
+        default:
+            return "unknown";
+        }
+    }
+
+    function supportsPsk(network): bool {
+        return network
+            && root.authKind(network) === "personal";
     }
 
     function needsPsk(network): bool {
         return network
             && !network.known
             && root.supportsPsk(network);
+    }
+
+    function needsEnterpriseAuth(network): bool {
+        return network
+            && !network.known
+            && root.authKind(network) === "enterprise";
+    }
+
+    function needsLegacyAuth(network): bool {
+        return network
+            && !network.known
+            && root.authKind(network) === "legacy";
     }
 
     function connectWithPsk(network, psk: string): void {
