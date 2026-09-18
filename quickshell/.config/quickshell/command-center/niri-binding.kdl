@@ -1,0 +1,4 @@
+// Include this file from config.kdl, or copy the bind into your existing binds block.
+binds {
+    Mod+Space { spawn-sh "qs ipc call commandCenter toggle"; }
+}

@@ -1,0 +1,2 @@
+singleton CommandCenterState 1.0 CommandCenterState.qml
+singleton ModeRegistry 1.0 ModeRegistry.qml
