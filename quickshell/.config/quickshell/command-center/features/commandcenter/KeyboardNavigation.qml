@@ -6,7 +6,7 @@ Item {
     required property var resultList
     required property var modeAdapter
     function handle(event) {
-        if (event.key === Qt.Key_Escape) CommandCenterState.escape()
+        if (event.key === Qt.Key_Escape) CommandCenterState.handleEscape()
         else if (event.key === Qt.Key_Down || (event.key === Qt.Key_N && event.modifiers & Qt.ControlModifier))
             CommandCenterState.moveSelection(1, resultList.items.length)
         else if (event.key === Qt.Key_Up || (event.key === Qt.Key_P && event.modifiers & Qt.ControlModifier))

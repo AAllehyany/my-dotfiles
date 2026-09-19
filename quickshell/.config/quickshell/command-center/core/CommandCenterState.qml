@@ -23,7 +23,7 @@ QtObject {
         navigationDepth = 0
     }
     function enter() { navigationDepth += 1 }
-    function escape() {
+    function handleEscape() {
         if (navigationDepth > 0) navigationDepth -= 1
         else if (query.length > 0) query = ""
         else close()
