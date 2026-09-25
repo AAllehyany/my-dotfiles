@@ -182,7 +182,7 @@ layout {
         // - CSS-like notation: "rgb(255, 127, 0)", rgba(), hsl() and a few others.
 
         // Color of the ring on the active monitor.
-        active-color "#e6be49"
+        active-color "#8d959f"
 
         // Color of the ring on inactive monitors.
         //
@@ -213,7 +213,7 @@ layout {
         off
 
         width 4
-        active-color "#ffc87f"
+        active-color "#8d959f"
         inactive-color "#505050"
 
         // Color of the border around windows that request your attention.
@@ -286,6 +286,7 @@ layout {
 //spawn-at-startup "waybar"
 
 //spawn-at-startup "mako"
+spawn-at-startup "qs" "-c" "boron-lab"
 spawn-sh-at-startup "swaybg -i $HOME/wallpapers/record.jpeg -m fill"
 spawn-sh-at-startup "$HOME/.local/bin/wob-volume-server"
 // To run a shell command (with variables, pipes, etc.), use spawn-sh-at-startup:
@@ -638,6 +639,7 @@ binds {
     // Mod+Space       { switch-layout "next"; }
     // Mod+Shift+Space { switch-layout "prev"; }
 
+    Mod+Space { spawn-sh "qs -c boron-lab ipc call launcher toggle"; }
     Mod+Shift+S { screenshot; }
     Mod+Shift+Ctrl+S { screenshot-screen; }
     Mod+Shift+Alt+S { screenshot-window; }
