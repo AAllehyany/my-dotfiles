@@ -1,0 +1,8 @@
+{
+  "protocolVersion": 1,
+  "id": "github",
+  "label": "GitHub",
+  "aliases": ["gh"],
+  "icon": "applications-development",
+  "command": ["python3", "plugin.py"]
+}

@@ -1,0 +1,8 @@
+{
+  "protocolVersion": 1,
+  "id": "example",
+  "label": "Example",
+  "aliases": [],
+  "icon": "dialog-information",
+  "command": ["python3", "plugin.py"]
+}
