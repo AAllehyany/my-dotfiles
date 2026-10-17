@@ -64,7 +64,7 @@ the IPC command. The implementation does not change your Niri configuration.
 | Escape | Dismiss prompt/actions, clear search, then close |
 | Click outside | Close |
 
-Type `@apps `, `@tray `, `@devices `, or `@github ` to switch modes.
+Type `@apps `, `@tray `, `@devices `, `@notifications `, or `@github ` to switch modes.
 `@wifi ` and `@bluetooth ` enter a specific Devices section; `@gh ` is a GitHub
 alias. Typing `@` lists available modes and aliases; `@wi` and `@blu` narrow to
 Wi-Fi and Bluetooth. Use Up/Down to select a suggestion and Tab, Enter, or a
@@ -107,6 +107,69 @@ is unavailable. It fits the output and shows up to eight rows before scrolling.
 - **GitHub:** separate repository, issue, and PR searches; browser opening; and
   confirmed PR merges. Search accepts GitHub qualifiers. Results are capped at
   30 per query; narrow the search to find more specific results.
+- **Notifications:** desktop notification history, newest first. Search title,
+  body, or application; click/Enter invokes the sender's default action when
+  supplied and removes the entry. Ctrl+K lists other sender actions and Dismiss.
+  The header's NOTIFS button shows the unread count and opens this mode;
+  `@notifs ` is an alias. Only entries visible in the center become read.
+  Clear all removes the entire history, including entries hidden by search.
+
+### Desktop notifications
+
+Boron receives standard Linux desktop notifications. Toasts appear at the bottom
+right of Niri's focused output, with a first-output fallback. Each output shows
+up to three cards, newest at the bottom; overflow remains in history. Each card
+disappears within three seconds, including critical notifications. Hovering and
+replacement updates do not extend that deadline. Clicking invokes the sender's
+default action if available, then removes the notification; the × dismisses it
+without running an action. Images fall back to application icons when available.
+
+Opening Notifications mode hides the toast stack. New arrivals appear only in
+the center while that mode is open, and leaving does not replay them. History
+stays in memory until cleared or Boron exits. QML reloads restore live entries
+as read without replaying toasts. Sender-withdrawn entries are removed; transient
+notifications are toast-only and expire completely. Existing device/plugin
+status messages remain in their current UI. There is no disk history, sound,
+inline reply, or Do Not Disturb mode.
+
+Open the center directly from a compositor binding or terminal:
+
+```sh
+qs -c boron ipc call notifications open
+```
+
+Only one daemon can own `org.freedesktop.Notifications`. This session had Mako
+running, and Fedora provides D-Bus activation through `mako.service`. Boron reports
+a competing daemon in Notifications mode and automatically takes over when it
+exits; it does not stop another daemon or change your startup configuration.
+
+To switch over, first keep Boron running and verify that Notifications mode opens.
+Remove any Mako startup entry from your compositor/autostart configuration (the
+Mako line in this checkout's Niri configuration was already commented). Then:
+
+```sh
+systemctl --user mask --now mako.service
+busctl --user status org.freedesktop.Notifications
+notify-send -a 'Boron test' 'Notifications ready' 'This toast lasts three seconds.'
+```
+
+The bus owner should be Boron's `qs` process. Allow up to five seconds for the
+center's ownership message to clear. If Mako was launched directly rather than
+through its service, stop that specific process as well. Other distributions
+may use different activation mechanisms; disable the competing daemon's actual
+launcher. If a toast has expired, verify it remains in the center.
+
+To roll back, stop the Boron instance, then restore Mako:
+
+```sh
+qs -c boron kill
+systemctl --user unmask mako.service
+systemctl --user start mako.service
+```
+
+Restore its previous startup entry if you removed one. To run Boron's launcher
+alongside Mako, remove `NotificationBackend { service: notifications }` from
+`shell.qml` before restarting Boron; its notification center will then be empty.
 
 ### GitHub setup
 
@@ -168,6 +231,8 @@ node tests/test_search.cjs
 QT_QPA_PLATFORM=offscreen qs -p smoke.qml --no-color
 QT_QPA_PLATFORM=offscreen qs -p scroll-smoke.qml --no-color
 QT_QPA_PLATFORM=offscreen qs -p navigation-smoke.qml --no-color
+QT_QPA_PLATFORM=offscreen qs -p notifications-smoke.qml --no-color
+python3 tests/test_notifications_bus.py
 ```
 
 `smoke.qml` checks QML state transitions and adapters with fixture network data.
@@ -192,6 +257,24 @@ qs -p preview.qml --no-color
 The preview cycles through compact, expanded, confirmation, and device views,
 saves panel-only screenshots under `/tmp/boron-*.png`, and exits automatically.
 It never invokes real actions.
+
+`notifications-smoke.qml` checks toast deadlines, overflow, independent outputs,
+monitor removal, action lifecycles, search, unread visibility, and center controls
+using inert notifications. It never starts a desktop notification server.
+`test_notifications_bus.py` additionally checks real D-Bus notifications, image
+data, close reasons, actions, daemon handover, and QML reloads on a private bus
+with desktop-service activation disabled. It requires `dbus-run-session`,
+`busctl`, and Python's Gio bindings, and runs separately from unittest discovery.
+
+For a short Wayland notification preview:
+
+```sh
+qs -p notification-preview.qml --no-color
+```
+
+This shows fixture-only toasts and the center, saves screenshots under
+`/tmp/boron-toast-*.png` and `/tmp/boron-notification-center.png`, then exits.
+Its missing-image warning deliberately exercises application-icon fallback.
 
 Real hardware pairing, authenticated GitHub access, and power operations still
 need verification in your session. The automated suite substitutes fixtures for

@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
-RESERVED = {"apps", "tray", "devices", "wifi", "bluetooth"}
+RESERVED = {"apps", "tray", "devices", "wifi", "bluetooth", "notifications", "notifs"}
 LIMIT = 1024 * 1024
 
 

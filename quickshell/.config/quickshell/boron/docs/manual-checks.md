@@ -24,6 +24,20 @@ These checks cover the remaining real-session behavior:
   to merge, then verify the reported immediate/queued/scheduled outcome.
 - Disable networking during GitHub search, then reconnect and Retry. Confirm
   Applications remains usable while a remote service fails.
+- Follow the README's notification-daemon handover and verify the session bus
+  owner is Boron's `qs` process. Send notifications from a real application;
+  check image/icon fallback, default-action clicks, explicit dismissal, and
+  additional actions in Ctrl+K. Inspect the competing-daemon message with Mako
+  active before switching over.
+- Send a burst of notifications on each focused output. Confirm at most three
+  appear per output, newest at the bottom right, no toast exceeds three seconds,
+  and pointer hover or replacements do not extend its deadline. Type in another
+  application while arrivals appear and click the gaps between cards: neither
+  keyboard focus nor unrelated desktop clicks should be intercepted.
+- Verify fractional scaling, narrow outputs, and unplugging an output with
+  active toasts. Check expired toasts remain in history, offscreen entries stay
+  unread until scrolled into view, arrivals stay in the center while it is open,
+  Clear all works during search, and QML reloads do not replay old notifications.
 
 Hardware and authenticated-service checks are intentionally not simulated as
 successful real integrations in the test report.

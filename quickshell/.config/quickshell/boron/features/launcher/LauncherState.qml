@@ -5,12 +5,15 @@ import "../applications"
 import "../systemtray"
 import "../devices"
 import "../plugins"
+import "../notifications"
 import "../../core/Search.js" as Search
 
 Item {
     id: root
     property bool opened: false
     property bool openPending: false
+    property var notificationService: null
+    readonly property bool notificationCenterVisible: opened && modeId === "notifications" && !pickingMode && !completingMode
     property string modeId: "apps"
     property string query: ""
     property bool pickingMode: false
@@ -24,10 +27,11 @@ Item {
     readonly property var modes: [
         {id: "apps", label: "Applications", aliases: []},
         {id: "tray", label: "System Tray", aliases: []},
-        {id: "devices", label: "Devices", aliases: ["wifi", "bluetooth"], aliasLabels: {wifi: "Devices · Wi-Fi", bluetooth: "Devices · Bluetooth"}}
+        {id: "devices", label: "Devices", aliases: ["wifi", "bluetooth"], aliasLabels: {wifi: "Devices · Wi-Fi", bluetooth: "Devices · Bluetooth"}},
+        {id: "notifications", label: "Notifications", aliases: ["notifs"]}
     ].concat(plugins.modes)
     readonly property var mode: modes.find(m => m.id === modeId) || modes[0]
-    readonly property var adapter: modeId === "apps" ? applications : modeId === "tray" ? tray : modeId === "devices" ? devices : plugins
+    readonly property var adapter: modeId === "apps" ? applications : modeId === "tray" ? tray : modeId === "devices" ? devices : modeId === "notifications" ? notifications : plugins
     readonly property bool isPlugin: adapter === plugins
     readonly property bool completingMode: !pickingMode && !prompt && Search.isModePrefix(query)
     readonly property bool loading: !completingMode && adapter.loading
@@ -49,6 +53,7 @@ Item {
     TrayMode { id: tray; active: root.opened && root.modeId === "tray"; query: root.query }
     DevicesMode { id: devices; active: root.opened && root.modeId === "devices"; query: root.query }
     PluginMode { id: plugins; active: root.opened && root.isPlugin && !root.completingMode; modeId: root.isPlugin ? root.modeId : ""; query: root.completingMode ? "" : root.query }
+    NotificationsMode { id: notifications; service: root.notificationService; active: root.notificationCenterVisible; query: root.query }
     Connections {
         target: root.adapter
         function onCloseRequested() { root.close(); }
@@ -101,6 +106,11 @@ Item {
         prompt = null; actionRow = null; pickingMode = false; opened = false;
     }
     function toggle() { if (opened) close(); else open(); }
+    function openNotifications() {
+        if (actionRunning || prompt) return;
+        if (!opened) open();
+        switchMode("notifications", "");
+    }
     function switchMode(id, section) {
         if (actionRunning) { message = "Wait for the current action to finish."; return; }
         adapter.cancel();

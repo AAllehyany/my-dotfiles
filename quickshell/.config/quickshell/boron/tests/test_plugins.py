@@ -14,6 +14,23 @@ SPEC = {"id": "fixture", "command": [sys.executable, str(ROOT / "tests/fixtures/
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_notification_names_are_reserved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            config = base / "plugins.json"
+            directory = base / "custom"
+            directory.mkdir()
+            for name in ("notifications", "notifs"):
+                for mode_id, aliases in ((name, []), ("custom", [name])):
+                    with self.subTest(mode_id=mode_id, aliases=aliases):
+                        config.write_text(json.dumps({"enabled": [mode_id]}))
+                        manifest = {"id": mode_id, "label": "Custom", "protocolVersion": 1,
+                                    "command": ["python3", "plugin.py"], "aliases": aliases}
+                        (directory / "manifest.json").write_text(json.dumps(manifest))
+                        modes, errors = discover(config, base)
+                        self.assertEqual(modes, [])
+                        self.assertEqual(len(errors), 1)
+
     def test_validation(self):
         for response in ({}, {"id": 1, "result": []}, {"id": 1, "result": {"items": [{"id": "x"}]}},
                          {"id": 1, "result": {"items": [{"id": "x", "title": "A"}, {"id": "x", "title": "B"}]}}):

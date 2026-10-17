@@ -5,6 +5,7 @@ import "../../theme"
 import "../../components"
 
 import "../devices"
+import "../notifications"
 
 Item {
     id: window
@@ -12,7 +13,24 @@ Item {
     readonly property Item surface: panel
     visible: state.opened
     readonly property bool deviceNavigation: state.modeId === "devices" && !state.prompt && !state.pickingMode && !state.actionRunning && !state.completingMode
-    onVisibleChanged: { if (visible) Qt.callLater(() => search.forceActiveFocus()); }
+    readonly property var notificationService: state.notificationService || null
+    readonly property bool notificationList: state.modeId === "notifications" && !state.prompt && !state.pickingMode && !state.completingMode && !state.actionRow
+    function markVisibleNotificationsRead() {
+        if (!visible || !notificationList || !notificationService) return;
+        const ids = [];
+        for (let i = 0; i < list.count; i++) {
+            const item = list.itemAtIndex(i);
+            if (item && item.y + item.height > list.contentY && item.y < list.contentY + list.height) ids.push(item.rowData.id);
+        }
+        notificationService.markVisibleRead(ids);
+    }
+    Timer { id: readVisible; interval: 0; onTriggered: window.markVisibleNotificationsRead() }
+    onNotificationListChanged: readVisible.restart()
+    Connections {
+        target: window.notificationService
+        function onContentUpdated() { readVisible.restart(); }
+    }
+    onVisibleChanged: { if (visible) { Qt.callLater(() => search.forceActiveFocus()); readVisible.restart(); } }
     Component.onCompleted: { if (visible) Qt.callLater(() => search.forceActiveFocus()); }
     function focusResults() {
         if (!deviceNavigation || !state.rows.length) { search.forceActiveFocus(); return; }
@@ -58,6 +76,9 @@ Item {
             LauncherHeader {
                 id: header
                 Layout.fillWidth: true
+                notificationService: window.notificationService
+                notificationsEnabled: !window.state.prompt && !window.state.actionRunning
+                onNotificationsRequested: window.state.openNotifications()
             }
             Rectangle {
                 Layout.fillWidth: true
@@ -115,6 +136,34 @@ Item {
                 }
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
+            RowLayout {
+                id: notificationToolbar
+                visible: window.notificationList
+                Layout.fillWidth: true
+                Layout.leftMargin: 18; Layout.rightMargin: 16
+                spacing: 12
+                Text {
+                    Layout.fillWidth: true
+                    text: "NOTIFICATIONS"
+                    color: Theme.muted; font.family: Theme.font; font.pixelSize: Theme.small
+                }
+                ActionButton {
+                    objectName: "clearNotificationsButton"
+                    text: "Clear all"
+                    enabled: !!window.notificationService && window.notificationService.history.length > 0
+                    onClicked: window.notificationService.clear()
+                }
+            }
+            Text {
+                id: notificationError
+                visible: window.notificationList && !!window.notificationService && !!window.notificationService.error
+                Layout.fillWidth: true
+                Layout.margins: visible ? 16 : 0
+                text: window.notificationService ? window.notificationService.error : ""
+                textFormat: Text.PlainText
+                color: Theme.danger; font.family: Theme.font; font.pixelSize: Theme.small
+                wrapMode: Text.Wrap
+            }
             RowLayout {
                 id: tabs
                 visible: window.state.filters.length > 0 && !window.state.prompt && !window.state.pickingMode && !window.state.completingMode
@@ -177,11 +226,15 @@ Item {
                 objectName: "launcherResults"
                 visible: !window.state.prompt && window.state.rows.length > 0
                 Layout.fillWidth: true
-                Layout.preferredHeight: visible ? Math.max(0, Math.min(8 * Theme.rowHeight, window.state.rows.length * Theme.rowHeight, panel.maxPanelHeight - header.implicitHeight - Theme.searchHeight - Theme.footerHeight - (tabs.visible ? 50 : 0) - (status.visible ? status.implicitHeight : 0) - 4)) : 0
+                Layout.preferredHeight: visible ? Math.max(0, Math.min(8 * Theme.rowHeight, window.state.rows.length * rowHeight, panel.maxPanelHeight - header.implicitHeight - Theme.searchHeight - Theme.footerHeight - (notificationToolbar.visible ? notificationToolbar.implicitHeight : 0) - (notificationError.visible ? notificationError.implicitHeight + 32 : 0) - (tabs.visible ? 50 : 0) - (status.visible ? status.implicitHeight : 0) - 4)) : 0
                 rows: window.state.rows
                 viewKey: window.state.resultContext
                 selectionIndex: window.state.selectedIndex
-                rowHeight: Theme.rowHeight
+                rowHeight: window.notificationList ? Theme.notificationRowHeight : Theme.rowHeight
+                onContentYChanged: readVisible.restart()
+                onHeightChanged: readVisible.restart()
+                onCountChanged: readVisible.restart()
+                onSynchronizingChanged: if (!synchronizing) readVisible.restart()
                 Keys.priority: Keys.BeforeItem
                 Keys.onPressed: event => {
                     if (!window.deviceNavigation || (event.modifiers !== Qt.NoModifier && event.modifiers !== Qt.ShiftModifier)) return;
@@ -216,24 +269,32 @@ Item {
                     readonly property var modelData: rowData
                     required property int index
                     width: list.width
-                    height: Theme.rowHeight
+                    height: list.rowHeight
                     color: index === window.state.selectedIndex ? Theme.selection : "transparent"
                     opacity: modelData.disabled ? 0.45 : 1
                     Rectangle { width: 3; height: parent.height - 16; y: 8; color: Theme.accent; visible: row.index === window.state.selectedIndex }
                     RowLayout {
-                        anchors { fill: parent; leftMargin: 18; rightMargin: 18 }
+                        anchors { fill: parent; leftMargin: 18; rightMargin: row.modelData.notification ? 54 : 18 }
                         spacing: 14
                         Item {
+                            visible: !row.modelData.notification
                             implicitWidth: 28; implicitHeight: 28
-                            Image { id: icon; anchors.fill: parent; source: row.modelData.icon || ""; sourceSize.width: 28; sourceSize.height: 28; visible: status === Image.Ready }
+                            Image { id: icon; anchors.fill: parent; source: row.modelData.notification ? "" : row.modelData.icon || ""; sourceSize.width: 28; sourceSize.height: 28; visible: status === Image.Ready }
                             Text { anchors.centerIn: parent; visible: !icon.visible; text: (row.modelData.title || "·").slice(0, 1).toUpperCase(); color: Theme.accent; font.family: Theme.font; font.pixelSize: 17 }
+                        }
+                        NotificationImage {
+                            visible: !!row.modelData.notification && available
+                            image: row.modelData.notification ? row.modelData.icon || "" : ""
+                            appIcon: row.modelData.appIcon || ""
                         }
                         ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 3
                             Text { Layout.fillWidth: true; text: row.modelData.title; color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fontSize; elide: Text.ElideRight; textFormat: Text.PlainText }
-                            Text { Layout.fillWidth: true; text: row.modelData.subtitle || ""; color: Theme.muted; font.family: Theme.font; font.pixelSize: Theme.small; elide: Text.ElideRight; textFormat: Text.PlainText }
+                            Text { Layout.fillWidth: true; text: row.modelData.subtitle || ""; color: Theme.muted; font.family: Theme.font; font.pixelSize: Theme.small; elide: Text.ElideRight; textFormat: Text.PlainText; wrapMode: row.modelData.notification ? Text.Wrap : Text.NoWrap; maximumLineCount: row.modelData.notification ? 2 : 1 }
+                            Text { Layout.fillWidth: true; visible: !!row.modelData.notification; text: row.modelData.metadata || ""; color: row.modelData.unread ? Theme.accent : Theme.muted; font.family: Theme.font; font.pixelSize: 10; elide: Text.ElideRight; textFormat: Text.PlainText }
                         }
+                        Rectangle { visible: !!row.modelData.unread; implicitWidth: 5; implicitHeight: 5; color: row.modelData.critical ? Theme.danger : Theme.accent }
                         Text { text: row.index === window.state.selectedIndex ? "↵" : row.modelData.group || ""; color: row.index === window.state.selectedIndex ? Theme.accent : Theme.muted; font.family: Theme.font; font.pixelSize: Theme.small }
                     }
                     MouseArea {
@@ -254,6 +315,14 @@ Item {
                             if (mouse.button === Qt.RightButton) window.state.showActions(); else window.state.activate(row.index);
                         }
                     }
+                    ActionButton {
+                        visible: !!row.modelData.notification
+                        anchors { right: parent.right; verticalCenter: parent.verticalCenter; rightMargin: 12 }
+                        implicitWidth: 28; implicitHeight: 28
+                        text: "×"
+                        Accessible.name: "Dismiss " + row.modelData.title
+                        onClicked: window.notificationService.dismiss(row.modelData.id)
+                    }
                 }
             }
             Rectangle {
@@ -267,7 +336,7 @@ Item {
                     anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; margins: 16 }
                     Text {
                         Layout.fillWidth: true
-                        text: window.state.loading ? "Working…" : window.state.message || (window.state.completingMode ? "No matching mode" : window.state.modeId === "github" && !window.state.query ? "Type to search GitHub." : "No results")
+                        text: window.state.loading ? "Working…" : window.state.message || (window.state.completingMode ? "No matching mode" : window.notificationList ? (window.state.query.trim() ? "No matching notifications" : "No notifications") : window.state.modeId === "github" && !window.state.query ? "Type to search GitHub." : "No results")
                         color: window.state.pluginError ? Theme.danger : Theme.muted
                         font.family: Theme.font; font.pixelSize: 12
                         wrapMode: Text.Wrap

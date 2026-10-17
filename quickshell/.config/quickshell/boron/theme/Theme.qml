@@ -20,4 +20,10 @@ Singleton {
     readonly property int searchHeight: 72
     readonly property int footerHeight: 34
     readonly property int motion: 160
+    readonly property int toastWidth: 380
+    readonly property int toastHeight: 108
+    readonly property int toastMargin: 24
+    readonly property int toastSpacing: 8
+    readonly property int toastDuration: 3000
+    readonly property int notificationRowHeight: 92
 }
