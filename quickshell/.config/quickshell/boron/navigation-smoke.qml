@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import QtTest 1.2
 import "features/launcher"
+import "tests"
 
 ShellRoot {
     id: test
@@ -15,6 +16,8 @@ ShellRoot {
         function disconnect() { test.activations++; }
     }
     LauncherState { id: state } // closed: no device scans or remote queries
+    FixtureTray { id: fixtureTray }
+    FixtureTray { id: secondTray; title: "Second" }
     Window {
         id: host
         visible: true; width: 1000; height: 800
@@ -145,6 +148,76 @@ ShellRoot {
                 break;
             case 58:
                 check(state.modeId === "apps" && search.activeFocus, "selected suggestion routes to its mode; mode=" + state.modeId + ", focus=" + host.activeFocusItem + ", query=" + state.query);
+                press(Qt.Key_Q, Qt.ControlModifier);
+                break;
+            case 59:
+                check(!state.prompt && !fixtureTray.quitCount, "Ctrl+Q is inactive outside Tray");
+                state.switchMode("tray", "");
+                state.adapter.items = [fixtureTray, secondTray];
+                state.adapter.quitLookup.openerComponent = fixtureTray.openerComponent;
+                state.selectResult(1);
+                break;
+            case 60: press(Qt.Key_Q, Qt.ControlModifier); break;
+            case 61:
+                check(state.prompt && state.prompt.title === "Quit Second?" && secondTray.quitCount === 0, "Ctrl+Q targets selected tray app and requires confirmation");
+                check(host.activeFocusItem.text === "Cancel", "quit prompt initially focuses Cancel");
+                press(Qt.Key_Q, Qt.ControlModifier);
+                press(Qt.Key_Space);
+                break;
+            case 62:
+                check(!state.prompt && secondTray.quitCount === 0 && search.activeFocus, "Space on initial Cancel leaves app running and restores focus");
+                state.showActions();
+                break;
+            case 63: press(Qt.Key_Q, Qt.ControlModifier); break;
+            case 64:
+                check(state.prompt && state.prompt.title === "Quit Second?", "Ctrl+Q in additional actions targets their owning app");
+                press(Qt.Key_Tab);
+                break;
+            case 65:
+                check(host.activeFocusItem.text === "Quit", "Quit is keyboard reachable");
+                press(Qt.Key_Space);
+                break;
+            case 66:
+                check(secondTray.quitCount === 1 && fixtureTray.quitCount === 0 && !state.prompt && !state.opened, "confirmed Quit invokes exactly the selected app command");
+                state.switchMode("tray", "");
+                state.showModes();
+                press(Qt.Key_Q, Qt.ControlModifier);
+                break;
+            case 67:
+                check(state.pickingMode && !state.prompt, "Ctrl+Q inactive in mode picker");
+                state.goBack(); state.setQuery("@");
+                press(Qt.Key_Q, Qt.ControlModifier);
+                break;
+            case 68:
+                check(state.completingMode && !state.prompt, "Ctrl+Q inactive in mode completion");
+                state.goBack();
+                state.selectResult(state.rows.findIndex(row => row.id === "restart"));
+                press(Qt.Key_Q, Qt.ControlModifier);
+                break;
+            case 69:
+                check(!state.prompt && !state.loading, "Ctrl+Q does not invoke power rows");
+                state.selectResult(0); view.visible = false;
+                press(Qt.Key_Q, Qt.ControlModifier);
+                break;
+            case 70:
+                check(!state.prompt && secondTray.quitCount === 1, "hidden launcher ignores Ctrl+Q");
+                view.visible = true;
+                state.adapter.menuStack = [null];
+                press(Qt.Key_Q, Qt.ControlModifier);
+                break;
+            case 71:
+                check(!state.prompt, "Ctrl+Q inactive inside tray menus");
+                state.adapter.cancel();
+                fixtureTray.menu.entries = [];
+                press(Qt.Key_Q, Qt.ControlModifier);
+                break;
+            case 72:
+                check(state.loading && !state.prompt, "Ctrl+Q waits for an unloaded tray menu");
+                press(Qt.Key_Q, Qt.ControlModifier);
+                press(Qt.Key_Escape);
+                break;
+            case 73:
+                check(!state.loading && !state.prompt && !state.adapter.quitLookup.openers.length, "Escape cancels pending lookup and repeated Ctrl+Q cannot duplicate it");
                 console.warn("NAVIGATION SMOKE PASSED"); Qt.quit();
             }
         }

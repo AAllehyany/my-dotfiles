@@ -56,6 +56,7 @@ the IPC command. The implementation does not change your Niri configuration.
 | Up/Down, Ctrl+P/N | Select a result |
 | Enter | Default action |
 | Ctrl+K, right-click | Additional actions |
+| Ctrl+Q | Confirm quitting the selected tray app (System Tray only) |
 | Ctrl+M, mode button | Searchable mode picker |
 | Ctrl+Tab / Ctrl+Shift+Tab | Next / previous device tab in Devices; next / previous mode elsewhere |
 | Ctrl+PageDown / Ctrl+PageUp | Next / previous launcher mode from any mode |
@@ -95,7 +96,10 @@ is unavailable. It fits the output and shows up to eight rows before scrolling.
 - **Applications:** desktop-entry name/keyword search, fuzzy matching, desktop
   actions, and terminal application support through Kitty.
 - **System Tray:** live tray entries, nested application menus, and Sleep,
-  Restart, and Shutdown. Restart/Shutdown require confirmation.
+  Restart, and Shutdown. Ctrl+Q finds the selected app's enabled Quit/Exit menu
+  command and asks for confirmation; it also works from the app's additional
+  actions. Apps without a supported command show a notice. Restart/Shutdown
+  require confirmation.
 - **Devices:** adapter selection, Wi-Fi radio/network controls, personal-network
   passwords, Bluetooth discovery, pairing prompts, trust, connect/disconnect,
   and forget. Fixed Wi-Fi/Bluetooth tabs show the active section. Live refreshes
@@ -231,6 +235,7 @@ node tests/test_search.cjs
 QT_QPA_PLATFORM=offscreen qs -p smoke.qml --no-color
 QT_QPA_PLATFORM=offscreen qs -p scroll-smoke.qml --no-color
 QT_QPA_PLATFORM=offscreen qs -p navigation-smoke.qml --no-color
+QT_QPA_PLATFORM=offscreen qs -p tray-quit-smoke.qml --no-color
 QT_QPA_PLATFORM=offscreen qs -p notifications-smoke.qml --no-color
 python3 tests/test_notifications_bus.py
 ```
@@ -244,9 +249,14 @@ statuses, insertion, reordering, disappearing devices, keyboard navigation,
 tab changes, and empty/repopulated lists. It logs `SCROLL SMOKE PASSED`.
 
 `navigation-smoke.qml` uses QtTest to send real keyboard/mouse events to the
-production launcher view with inert device fixtures. It verifies tab switching,
-focus traversal, search editing, result activation, live refresh, and prompt
-guards, then logs `NAVIGATION SMOKE PASSED`. It requires the QtTest QML module.
+production launcher view with inert device and tray fixtures. It verifies tab
+switching, focus traversal, search editing, result activation, live refresh,
+Ctrl+Q quit confirmation, and shortcut guards, then logs `NAVIGATION SMOKE PASSED`.
+It requires the QtTest QML module.
+
+`tray-quit-smoke.qml` checks quit confirmation and cancellation, nested and
+delayed menus, unavailable commands, disappearing apps, and menu cleanup with
+inert tray fixtures. It logs `TRAY QUIT SMOKE PASSED` and never quits real apps.
 
 For a short visual fixture preview on Wayland:
 

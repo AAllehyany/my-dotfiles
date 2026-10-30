@@ -36,6 +36,9 @@ Item {
     readonly property bool completingMode: !pickingMode && !prompt && Search.isModePrefix(query)
     readonly property bool loading: !completingMode && adapter.loading
     readonly property bool actionRunning: isPlugin && plugins.actionRunning
+    readonly property bool canQuitTray: modeId === "tray" && !prompt && !pickingMode && !completingMode
+        && !actionRunning && !tray.loading && !tray.menuStack.length
+        && !!(actionRow || rows[selectedIndex]) && (actionRow || rows[selectedIndex]).id.startsWith("tray:")
     readonly property var filters: modeId === "devices" ? devices.sections : isPlugin ? plugins.filters : []
     readonly property string activeFilter: modeId === "devices" ? devices.section : isPlugin ? plugins.filter : ""
     readonly property string resultContext: JSON.stringify([opened, modeId, query, pickingMode, actionRow ? actionRow.id : "", activeFilter, modeId === "devices" ? devices.viewKey : ""])
@@ -89,6 +92,11 @@ Item {
     onRowsChanged: {
         selectedIndex = Search.retainedIndex(rows, selectedId, selectedIndex);
         selectedId = rows.length ? rows[selectedIndex].id : "";
+    }
+    onResultContextChanged: { if (modeId === "tray" && tray.quitLookup.running) tray.cancelQuit(); }
+    onSelectedIdChanged: {
+        if (modeId === "tray" && tray.quitLookup.running && tray.quitRow
+                && (actionRow || rows[selectedIndex] || {}).id !== tray.quitRow.id) tray.cancelQuit();
     }
     function open() {
         if (opened) { focusSearch(); return; }
@@ -148,6 +156,11 @@ Item {
         if (prompt || pickingMode || actionRunning || completingMode) return;
         if (actionRow) actionRow = null;
         else if (rows[selectedIndex] && rows[selectedIndex].actions) { actionRow = rows[selectedIndex]; selectedIndex = 0; }
+    }
+    function quitTray() {
+        if (!canQuitTray) return;
+        message = "";
+        tray.requestQuit(actionRow || rows[selectedIndex]);
     }
     function activate(index) {
         const row = rows[index === undefined ? selectedIndex : index];

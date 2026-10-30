@@ -11,6 +11,9 @@ These checks cover the remaining real-session behavior:
   list, and all form controls are reachable with Tab.
 - Exercise a tray application's nested and checkable menu, then close the tray
   app while its menu is open.
+- With a disposable tray app selected, press Ctrl+Q and cancel; verify it stays
+  running. Repeat and confirm Quit, then verify the app exits. Also try Ctrl+Q
+  from its additional actions and an app without a Quit/Exit command.
 - Confirm a power prompt can be canceled. Only execute Sleep, Restart, or Shutdown
   when you intend to perform that operation.
 - Connect/disconnect a saved Wi-Fi network; try an incorrect password on a new

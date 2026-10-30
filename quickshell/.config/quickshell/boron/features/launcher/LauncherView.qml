@@ -364,6 +364,7 @@ Item {
     Shortcut { sequence: "Ctrl+N"; enabled: window.visible && !window.state.prompt; onActivated: window.state.move(1) }
     Shortcut { sequence: "Ctrl+P"; enabled: window.visible && !window.state.prompt; onActivated: window.state.move(-1) }
     Shortcut { sequence: "Ctrl+K"; enabled: window.visible && !window.state.prompt; onActivated: window.state.showActions() }
+    Shortcut { sequence: "Ctrl+Q"; enabled: window.visible && window.state.canQuitTray; onActivated: window.state.quitTray() }
     Shortcut { sequence: "Ctrl+M"; enabled: window.visible && !window.state.prompt; onActivated: window.state.showModes() }
     Shortcut { sequence: "Ctrl+Tab"; enabled: window.visible && !window.state.prompt && !window.state.actionRunning; onActivated: { if (window.deviceNavigation) window.switchDeviceTab(1); else window.state.cycle(1); } }
     Shortcut { sequence: "Ctrl+Shift+Tab"; enabled: window.visible && !window.state.prompt && !window.state.actionRunning; onActivated: { if (window.deviceNavigation) window.switchDeviceTab(-1); else window.state.cycle(-1); } }
