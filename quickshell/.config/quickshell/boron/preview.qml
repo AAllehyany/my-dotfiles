@@ -21,6 +21,13 @@ ShellRoot {
         property bool actionRunning: false
         property bool pickingMode: false
         property bool completingMode: false
+        property bool helpMode: false
+        readonly property bool browsing: !pickingMode && !helpMode && !completingMode && !prompt
+        readonly property var selectedRow: rows[selectedIndex] || null
+        property var secondaryAction: null
+        property bool canDismiss: false
+        property bool canQuitTray: false
+        property var modes: []
         property bool loading: false
         property string message: ""
         property int selectedIndex: 0
@@ -36,11 +43,16 @@ ShellRoot {
         function move(delta) { selectedIndex = Math.max(0, Math.min(rows.length - 1, selectedIndex + delta)); revealSelection(); }
         function selectResult(index) { selectedIndex = Math.max(0, Math.min(rows.length - 1, index)); revealSelection(); }
         function cycle(delta) {}
+        function stepBack() { return false; }
+        function menuBack() { return false; }
+        function menuEnter() { return false; }
+        function activateSecondary() {}
+        function showHelp() {}
         function goBack() { prompt = null; }
         function submit(values) { prompt = null; }
         function chooseFilter(id, keepFocus) { activeFilter = id; if (!keepFocus) focusSearch(); }
-        function cycleDeviceTab(delta, keepFocus) {
-            if (modeId !== "devices" || prompt || pickingMode) return;
+        function cycleFilter(delta, keepFocus) {
+            if (!filters.length || prompt || pickingMode) return;
             const index = filters.findIndex(tab => tab.id === activeFilter);
             chooseFilter(filters[(index + delta + filters.length) % filters.length].id, keepFocus);
         }

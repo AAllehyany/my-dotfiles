@@ -19,6 +19,11 @@ FocusScope {
         }
         submitted(values);
     }
+    Shortcut {
+        sequences: ["Ctrl+Return", "Ctrl+Enter"]
+        enabled: !root.prompt.displayOnly
+        onActivated: root.submit()
+    }
     ColumnLayout {
         id: content
         anchors { left: parent.left; right: parent.right; top: parent.top; margins: 16 }
@@ -68,8 +73,23 @@ FocusScope {
         }
         RowLayout {
             Layout.alignment: Qt.AlignRight
-            ActionButton { text: "Cancel"; onClicked: root.canceled(); Component.onCompleted: { if (!(root.prompt.fields || []).length) forceActiveFocus(); } }
-            ActionButton { text: root.prompt.submitLabel || "Confirm"; destructive: !!root.prompt.destructive; visible: !root.prompt.displayOnly; onClicked: root.submit() }
+            ActionButton {
+                id: cancelButton
+                objectName: "promptCancel"
+                text: "Cancel"
+                onClicked: root.canceled()
+                Keys.onRightPressed: { if (confirmButton.visible) confirmButton.forceActiveFocus(Qt.TabFocusReason); }
+                Component.onCompleted: { if (!(root.prompt.fields || []).length) forceActiveFocus(); }
+            }
+            ActionButton {
+                id: confirmButton
+                objectName: "promptConfirm"
+                text: root.prompt.submitLabel || "Confirm"
+                destructive: !!root.prompt.destructive
+                visible: !root.prompt.displayOnly
+                onClicked: root.submit()
+                Keys.onLeftPressed: cancelButton.forceActiveFocus(Qt.BacktabFocusReason)
+            }
         }
     }
 }

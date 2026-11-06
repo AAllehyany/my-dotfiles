@@ -38,7 +38,7 @@ Item {
                     network: n, disabled: n.stateChanging, icon: Quickshell.iconPath("network-wireless", true),
                     actions: [{id: "connect", title: n.connected ? "Disconnect" : "Connect"}]
                         .concat([WifiSecurityType.WpaPsk, WifiSecurityType.Wpa2Psk, WifiSecurityType.Sae].includes(n.security) ? [{id: "password", title: "Connect with password…"}] : [])
-                        .concat(n.known ? [{id: "forget", title: "Forget network"}] : [])}));
+                        .concat(n.known ? [{id: "forget", title: "Forget network", menuOnly: true}] : [])}));
                 rows = rows.concat(query ? Search.filter(networks, query) : networks.sort((a,b) => Number(b.network.connected) - Number(a.network.connected) || b.network.signalStrength - a.network.signalStrength));
             }
             rows.push({id: "wifi:settings", title: "Advanced network settings", subtitle: "Enterprise, certificates and hidden networks"});
@@ -51,7 +51,7 @@ Item {
                 const devices = bluetooth.devices.values.map(d => ({id: "bt:device:" + bluetooth.adapterId + ":" + d.address,
                     title: d.name || d.address, subtitle: d.pairing ? "Pairing…" : BluetoothDeviceState.toString(d.state) + (d.paired ? " · Paired" : " · Pair new device") + (d.batteryAvailable ? " · " + Math.round(d.battery * 100) + "%" : ""),
                     device: d, icon: Quickshell.iconPath(d.icon || "bluetooth", true), disabled: d.pairing || d.state === BluetoothDeviceState.Connecting || d.state === BluetoothDeviceState.Disconnecting,
-                    actions: [{id: "connect", title: d.connected ? "Disconnect" : d.paired ? "Connect" : "Pair and connect"}].concat(d.paired ? [{id: "trust", title: d.trusted ? "Untrust" : "Trust"}, {id: "forget", title: "Forget device"}] : [])}));
+                    actions: [{id: "connect", title: d.connected ? "Disconnect" : d.paired ? "Connect" : "Pair and connect"}].concat(d.paired ? [{id: "trust", title: d.trusted ? "Untrust" : "Trust"}, {id: "forget", title: "Forget device", menuOnly: true}] : [])}));
                 rows = rows.concat(query ? Search.filter(devices, query) : devices.sort((a,b) => Number(b.device.connected) - Number(a.device.connected) || Number(b.device.paired) - Number(a.device.paired) || a.title.localeCompare(b.title)));
             }
         }

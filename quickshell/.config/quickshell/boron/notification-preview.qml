@@ -9,7 +9,7 @@ ShellRoot {
     id: preview
     property int step: 0
     NotificationService { id: service; centerVisible: state.notificationCenterVisible }
-    LauncherState { id: state; notificationService: service }
+    LauncherState { id: state; historyPath: ""; notificationService: service }
     Launcher { id: center; state: state }
     ToastHost { id: toasts; service: service }
     Component { id: factory; FixtureNotification {} }

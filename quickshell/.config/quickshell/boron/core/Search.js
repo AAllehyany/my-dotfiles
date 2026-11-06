@@ -16,9 +16,12 @@ function score(text, query) {
     }
     return Math.max(1, 1000 - gaps - text.length);
 }
-function filter(rows, query) {
-    return rows.map(row => ({row: row, score: Math.max(score(row.title, query),
-        score(row.keywords || row.subtitle, query) * 0.6)}))
+// boost(row) adds a ranking bonus to rows that already match the query.
+function filter(rows, query, boost) {
+    return rows.map(row => {
+        const base = Math.max(score(row.title, query), score(row.keywords || row.subtitle, query) * 0.6);
+        return {row: row, score: base > 0 && boost ? base + boost(row) : base};
+    })
         .filter(x => x.score > 0)
         .sort((a, b) => b.score - a.score || a.row.title.localeCompare(b.row.title) || a.row.id.localeCompare(b.row.id))
         .map(x => x.row);

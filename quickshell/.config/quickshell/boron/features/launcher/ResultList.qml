@@ -11,6 +11,8 @@ ListView {
     property bool initialized: false
     property real pointerX: -1
     property real pointerY: -1
+    // First (mostly) visible row, for Alt+1–9.
+    readonly property int topIndex: count ? Math.max(0, Math.min(count - 1, Math.round((contentY - originY) / rowHeight))) : 0
 
     model: ListModel { id: items; dynamicRoles: true }
     highlightFollowsCurrentItem: false

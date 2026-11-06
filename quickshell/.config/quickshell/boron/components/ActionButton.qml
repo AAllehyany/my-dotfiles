@@ -10,6 +10,9 @@ Button {
     implicitWidth: Math.max(70, contentItem.implicitWidth + 24)
     font.family: Theme.font
     font.pixelSize: Theme.small
+    // Qt buttons only respond to Space; Enter should work too.
+    Keys.onReturnPressed: { if (enabled) clicked(); }
+    Keys.onEnterPressed: { if (enabled) clicked(); }
     contentItem: Text {
         text: root.text
         font: root.font

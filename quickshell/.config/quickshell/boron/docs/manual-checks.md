@@ -7,6 +7,12 @@ These checks cover the remaining real-session behavior:
 - Open on each monitor, including fractional scaling; verify focus returns to
   the previous application on Escape/outside click. Unplug a monitor and reopen.
 - Search and launch a graphical and a terminal application; try a desktop action.
+- Launch an app, reopen Boron and press Enter: the same app relaunches. Confirm
+  `~/.local/state/boron/history.json` was written, Ctrl+D removes a Recent entry,
+  and a missing or corrupt history file just shows an empty start.
+- Walk every mode without the mouse: Ctrl+/ help, Alt+1–9, Ctrl+1–9, Shift+Enter,
+  Tab through GitHub filters and notification Clear all, Backspace step-back, and
+  Enter/Ctrl+Enter in Wi-Fi password and power confirmation prompts.
 - Verify the query position stays fixed as results grow, navigation scrolls the
   list, and all form controls are reachable with Tab.
 - Exercise a tray application's nested and checkable menu, then close the tray

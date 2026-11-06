@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Controls
-import "../../theme"
+import "../theme"
 
 TabBar {
     id: root
@@ -10,6 +10,7 @@ TabBar {
     signal sectionRequested(string section)
     signal searchRequested()
     signal resultsRequested()
+    signal nextRequested()
     signal textEntered(string text)
 
     implicitHeight: 34
@@ -39,7 +40,7 @@ TabBar {
             id: button
             required property var modelData
             required property int index
-            objectName: "deviceTab-" + modelData.id
+            objectName: "filterTab-" + modelData.id
             text: modelData.label
             width: Math.max(90, label.implicitWidth + 28)
             height: root.implicitHeight
@@ -77,7 +78,7 @@ TabBar {
                 case Qt.Key_End: root.select(root.sections.length - 1); break;
                 case Qt.Key_Backtab: root.searchRequested(); break;
                 case Qt.Key_Tab:
-                    if (event.modifiers & Qt.ShiftModifier) root.searchRequested(); else root.resultsRequested();
+                    if (event.modifiers & Qt.ShiftModifier) root.searchRequested(); else root.nextRequested();
                     break;
                 case Qt.Key_Up: root.searchRequested(); break;
                 case Qt.Key_Down: case Qt.Key_Return: case Qt.Key_Enter: case Qt.Key_Space:

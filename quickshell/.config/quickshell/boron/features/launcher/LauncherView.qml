@@ -4,7 +4,6 @@ import QtQuick.Layouts
 import "../../theme"
 import "../../components"
 
-import "../devices"
 import "../notifications"
 
 Item {
@@ -12,9 +11,29 @@ Item {
     required property var state
     readonly property Item surface: panel
     visible: state.opened
-    readonly property bool deviceNavigation: state.modeId === "devices" && !state.prompt && !state.pickingMode && !state.actionRunning && !state.completingMode
+    // Tab/arrow focus model shared by every mode's result list.
+    readonly property bool listNavigation: state.browsing && !state.actionRunning
     readonly property var notificationService: state.notificationService || null
-    readonly property bool notificationList: state.modeId === "notifications" && !state.prompt && !state.pickingMode && !state.completingMode && !state.actionRow
+    readonly property bool notificationList: state.modeId === "notifications" && state.browsing && !state.actionRow
+    readonly property string footerHints: {
+        const s = state;
+        if (s.prompt) return "Tab Move   ↵ Choose   Ctrl+↵ Submit   Esc Cancel";
+        if (s.helpMode) return "Type to filter   Esc / Ctrl+/ Close";
+        if (s.completingMode) return "↑↓ Suggestions   Tab / ↵ Select mode   Esc Clear";
+        if (s.pickingMode) return "↑↓ Navigate   ↵ Switch   Ctrl+1–9 Direct   Esc Back";
+        if (s.actionRow) return "↑↓ Navigate   ↵ Run   Ctrl+K / Esc Back   Ctrl+/ Keys";
+        const parts = ["↵ Open"];
+        if (s.secondaryAction) {
+            const title = s.secondaryAction.title;
+            parts.push("⇧↵ " + (title.length > 24 ? title.slice(0, 23) + "…" : title));
+        }
+        parts.push("Ctrl+K Actions");
+        if (s.canQuitTray && s.selectedRow && s.selectedRow.id.startsWith("tray:")) parts.push("Ctrl+Q Quit");
+        if (s.canDismiss) parts.push("Ctrl+D " + (s.modeId === "apps" ? "Forget" : "Dismiss"));
+        if (s.pluginError) parts.push("Ctrl+R Retry");
+        parts.push("Ctrl+/ Keys");
+        return parts.join("   ");
+    }
     function markVisibleNotificationsRead() {
         if (!visible || !notificationList || !notificationService) return;
         const ids = [];
@@ -33,18 +52,53 @@ Item {
     onVisibleChanged: { if (visible) { Qt.callLater(() => search.forceActiveFocus()); readVisible.restart(); } }
     Component.onCompleted: { if (visible) Qt.callLater(() => search.forceActiveFocus()); }
     function focusResults() {
-        if (!deviceNavigation || !state.rows.length) { search.forceActiveFocus(); return; }
+        if (!listNavigation || !state.rows.length) { search.forceActiveFocus(); return; }
         list.forceActiveFocus(Qt.TabFocusReason);
         list.revealSelection();
     }
-    function switchDeviceTab(delta) {
-        if (!deviceNavigation) return;
-        const fromTabs = deviceTabs.hasTabFocus();
+    // Tab order: search → tabs → results → toolbar buttons → mode button.
+    function focusStops() {
+        return [
+            {name: "search", available: true},
+            {name: "tabs", available: tabs.visible && filterTabs.enabled},
+            {name: "results", available: list.visible && state.rows.length > 0},
+            {name: "clear", available: clearButton.visible && clearButton.enabled},
+            {name: "retry", available: retryButton.visible},
+            {name: "mode", available: modeButton.enabled}
+        ];
+    }
+    function focusStop(name, reason) {
+        if (name === "tabs") filterTabs.focusSelected(reason);
+        else if (name === "results") { list.forceActiveFocus(reason); list.revealSelection(); }
+        else ({search: search, clear: clearButton, retry: retryButton, mode: modeButton})[name].forceActiveFocus(reason);
+    }
+    function focusAdjacent(from, delta) {
+        const stops = focusStops();
+        const at = stops.findIndex(stop => stop.name === from);
+        for (let step = 1; step <= stops.length; step++) {
+            const stop = stops[((at + delta * step) % stops.length + stops.length) % stops.length];
+            if (stop.available) { focusStop(stop.name, delta > 0 ? Qt.TabFocusReason : Qt.BacktabFocusReason); return; }
+        }
+    }
+    function focusAbove() {
+        if (tabs.visible && filterTabs.enabled) filterTabs.focusSelected();
+        else search.forceActiveFocus(Qt.BacktabFocusReason);
+    }
+    function switchFilterTab(delta) {
+        if (!listNavigation || !state.filters.length) return;
+        const fromTabs = filterTabs.hasTabFocus();
         const fromResults = list.activeFocus;
-        state.cycleDeviceTab(delta, true);
-        if (fromTabs) deviceTabs.focusSelected();
+        state.cycleFilter(delta, true);
+        if (fromTabs) filterTabs.focusSelected();
         else if (fromResults) focusResults();
         else search.forceActiveFocus();
+    }
+    function pageResults(delta) {
+        state.selectResult(state.selectedIndex + delta * Math.max(1, Math.floor(list.height / list.rowHeight)));
+    }
+    function activateVisible(position) {
+        const index = list.topIndex + position;
+        if (index < state.rows.length) state.activate(index);
     }
     function typeInSearch(text) {
         state.setQuery(state.query + text);
@@ -94,7 +148,7 @@ Item {
                         Layout.fillWidth: true
                         enabled: !window.state.prompt && !window.state.actionRunning
                         text: window.state.query
-                        placeholderText: window.state.pickingMode ? "Switch mode…" : window.state.modeId === "apps" ? "Search applications…" : "Search " + window.state.mode.label.toLowerCase() + "…"
+                        placeholderText: window.state.helpMode ? "Filter keyboard shortcuts…" : window.state.pickingMode ? "Switch mode…" : window.state.modeId === "apps" ? "Search applications…" : "Search " + window.state.mode.label.toLowerCase() + "…"
                         placeholderTextColor: Theme.muted
                         color: Theme.text
                         selectionColor: Theme.selection
@@ -105,32 +159,50 @@ Item {
                         background: Item {}
                         onTextEdited: window.state.setQuery(text)
                         onAccepted: window.state.activate()
-                        Keys.onUpPressed: window.state.move(-1)
-                        Keys.onDownPressed: window.state.move(1)
-                        Keys.onTabPressed: event => {
-                            if (window.state.completingMode) { window.state.activate(); return; }
-                            if (!window.deviceNavigation) { event.accepted = false; return; }
-                            deviceTabs.focusSelected(Qt.TabFocusReason);
-                        }
-                        Keys.onBacktabPressed: event => {
-                            if (window.state.completingMode) { window.state.move(-1); return; }
-                            if (!window.deviceNavigation) { event.accepted = false; return; }
-                            modeButton.forceActiveFocus(Qt.BacktabFocusReason);
+                        Keys.onPressed: event => {
+                            const state = window.state;
+                            const plain = event.modifiers === Qt.NoModifier;
+                            const empty = text.length === 0;
+                            switch (event.key) {
+                            case Qt.Key_Up: if (!plain) return; state.move(-1); break;
+                            case Qt.Key_Down: if (!plain) return; state.move(1); break;
+                            case Qt.Key_PageUp: if (!plain) return; window.pageResults(-1); break;
+                            case Qt.Key_PageDown: if (!plain) return; window.pageResults(1); break;
+                            // With text, Home/End/Left/Right/Backspace keep editing the query.
+                            case Qt.Key_Home: if (!plain || !empty) return; state.selectResult(0); break;
+                            case Qt.Key_End: if (!plain || !empty) return; state.selectResult(state.rows.length - 1); break;
+                            case Qt.Key_Backspace: if (!plain || !empty || !state.stepBack()) return; break;
+                            case Qt.Key_Left: if (!plain || !empty || !state.menuBack()) return; break;
+                            case Qt.Key_Right: if (!plain || !empty || !state.menuEnter()) return; break;
+                            case Qt.Key_Return: case Qt.Key_Enter:
+                                if (event.modifiers !== Qt.ShiftModifier) return;
+                                state.activateSecondary(); break;
+                            case Qt.Key_Tab:
+                                if (state.completingMode) { state.activate(); break; }
+                                if (!window.listNavigation) return;
+                                window.focusAdjacent("search", 1); break;
+                            case Qt.Key_Backtab:
+                                if (state.completingMode) { state.move(-1); break; }
+                                if (!window.listNavigation) return;
+                                window.focusAdjacent("search", -1); break;
+                            default: return;
+                            }
+                            event.accepted = true;
                         }
                     }
                     ActionButton {
                         id: modeButton
                         objectName: "launcherModeButton"
-                        text: window.state.pickingMode ? "MODES" : window.state.mode.label
+                        text: window.state.pickingMode ? "MODES" : window.state.helpMode ? "KEYS" : window.state.mode.label
                         enabled: !window.state.prompt && !window.state.actionRunning
                         onClicked: window.state.showModes()
                         Keys.onTabPressed: event => {
-                            if (!window.deviceNavigation) { event.accepted = false; return; }
-                            search.forceActiveFocus(Qt.TabFocusReason);
+                            if (!window.listNavigation) { event.accepted = false; return; }
+                            window.focusAdjacent("mode", 1);
                         }
                         Keys.onBacktabPressed: event => {
-                            if (!window.deviceNavigation) { event.accepted = false; return; }
-                            window.focusResults();
+                            if (!window.listNavigation) { event.accepted = false; return; }
+                            window.focusAdjacent("mode", -1);
                         }
                     }
                 }
@@ -148,10 +220,13 @@ Item {
                     color: Theme.muted; font.family: Theme.font; font.pixelSize: Theme.small
                 }
                 ActionButton {
+                    id: clearButton
                     objectName: "clearNotificationsButton"
                     text: "Clear all"
                     enabled: !!window.notificationService && window.notificationService.history.length > 0
                     onClicked: window.notificationService.clear()
+                    Keys.onTabPressed: window.focusAdjacent("clear", 1)
+                    Keys.onBacktabPressed: window.focusAdjacent("clear", -1)
                 }
             }
             Text {
@@ -166,36 +241,25 @@ Item {
             }
             RowLayout {
                 id: tabs
-                visible: window.state.filters.length > 0 && !window.state.prompt && !window.state.pickingMode && !window.state.completingMode
+                visible: window.state.filters.length > 0 && window.state.browsing
                 Layout.fillWidth: true
                 Layout.margins: visible ? 8 : 0
                 spacing: 6
-                DeviceTabs {
-                    id: deviceTabs
-                    objectName: "deviceTabs"
-                    visible: window.state.modeId === "devices"
-                    enabled: window.deviceNavigation
-                    sections: visible ? window.state.filters : []
+                FilterTabs {
+                    id: filterTabs
+                    objectName: "filterTabs"
+                    enabled: window.listNavigation
+                    sections: tabs.visible ? window.state.filters : []
                     activeSection: window.state.activeFilter
                     onSectionRequested: section => window.state.chooseFilter(section, true)
                     onSearchRequested: search.forceActiveFocus(Qt.BacktabFocusReason)
                     onResultsRequested: window.focusResults()
+                    onNextRequested: window.focusAdjacent("tabs", 1)
                     onTextEntered: text => window.typeInSearch(text)
-                }
-                Repeater {
-                    model: window.state.modeId === "devices" ? [] : window.state.filters
-                    ActionButton {
-                        required property var modelData
-                        text: modelData.label
-                        selected: window.state.activeFilter === modelData.id || (!window.state.activeFilter && modelData.id === "repositories")
-                        enabled: !window.state.actionRunning
-                        onClicked: window.state.chooseFilter(modelData.id)
-                    }
                 }
                 Item { Layout.fillWidth: true }
                 Text {
-                    visible: window.state.modeId === "devices"
-                    text: "Ctrl+Tab Switch · ←/→ Navigate"
+                    text: "Ctrl+Tab · Alt+←/→ Switch"
                     color: Theme.muted
                     font.family: Theme.font
                     font.pixelSize: Theme.small
@@ -237,25 +301,30 @@ Item {
                 onSynchronizingChanged: if (!synchronizing) readVisible.restart()
                 Keys.priority: Keys.BeforeItem
                 Keys.onPressed: event => {
-                    if (!window.deviceNavigation || (event.modifiers !== Qt.NoModifier && event.modifiers !== Qt.ShiftModifier)) return;
+                    const state = window.state;
+                    const shift = event.modifiers === Qt.ShiftModifier;
+                    if (!window.listNavigation || (event.modifiers !== Qt.NoModifier && !shift)) return;
                     switch (event.key) {
                     case Qt.Key_Up:
-                        if (window.state.selectedIndex === 0) deviceTabs.focusSelected();
-                        else window.state.move(-1);
+                        if (state.selectedIndex === 0) window.focusAbove();
+                        else state.move(-1);
                         break;
-                    case Qt.Key_Down: window.state.move(1); break;
-                    case Qt.Key_Home: window.state.selectResult(0); break;
-                    case Qt.Key_End: window.state.selectResult(window.state.rows.length - 1); break;
-                    case Qt.Key_PageUp: window.state.selectResult(window.state.selectedIndex - Math.max(1, Math.floor(list.height / list.rowHeight))); break;
-                    case Qt.Key_PageDown: window.state.selectResult(window.state.selectedIndex + Math.max(1, Math.floor(list.height / list.rowHeight))); break;
-                    case Qt.Key_Return: case Qt.Key_Enter: window.state.activate(); break;
-                    case Qt.Key_Backtab: deviceTabs.focusSelected(Qt.BacktabFocusReason); break;
-                    case Qt.Key_Tab:
-                        if (event.modifiers & Qt.ShiftModifier) deviceTabs.focusSelected(Qt.BacktabFocusReason);
-                        else modeButton.forceActiveFocus(Qt.TabFocusReason);
+                    case Qt.Key_Down: state.move(1); break;
+                    case Qt.Key_Home: state.selectResult(0); break;
+                    case Qt.Key_End: state.selectResult(state.rows.length - 1); break;
+                    case Qt.Key_PageUp: window.pageResults(-1); break;
+                    case Qt.Key_PageDown: window.pageResults(1); break;
+                    case Qt.Key_Left: if (!state.menuBack()) return; break;
+                    case Qt.Key_Right: if (!state.menuEnter()) return; break;
+                    case Qt.Key_Delete: if (!state.canDismiss) return; state.dismissSelected(); break;
+                    case Qt.Key_Return: case Qt.Key_Enter:
+                        if (shift) state.activateSecondary(); else state.activate();
                         break;
+                    case Qt.Key_Backtab: window.focusAdjacent("results", -1); break;
+                    case Qt.Key_Tab: window.focusAdjacent("results", shift ? -1 : 1); break;
                     case Qt.Key_Backspace:
-                        window.state.setQuery(window.state.query.slice(0, -1)); search.forceActiveFocus(); break;
+                        if (!state.query) { if (!state.stepBack()) return; search.forceActiveFocus(); break; }
+                        state.setQuery(state.query.slice(0, -1)); search.forceActiveFocus(); break;
                     default:
                         if (!event.text || event.text.charCodeAt(0) < 32) return;
                         window.typeInSearch(event.text);
@@ -268,6 +337,7 @@ Item {
                     required property var rowData
                     readonly property var modelData: rowData
                     required property int index
+                    readonly property int hint: index - list.topIndex + 1
                     width: list.width
                     height: list.rowHeight
                     color: index === window.state.selectedIndex ? Theme.selection : "transparent"
@@ -295,7 +365,15 @@ Item {
                             Text { Layout.fillWidth: true; visible: !!row.modelData.notification; text: row.modelData.metadata || ""; color: row.modelData.unread ? Theme.accent : Theme.muted; font.family: Theme.font; font.pixelSize: 10; elide: Text.ElideRight; textFormat: Text.PlainText }
                         }
                         Rectangle { visible: !!row.modelData.unread; implicitWidth: 5; implicitHeight: 5; color: row.modelData.critical ? Theme.danger : Theme.accent }
-                        Text { text: row.index === window.state.selectedIndex ? "↵" : row.modelData.group || ""; color: row.index === window.state.selectedIndex ? Theme.accent : Theme.muted; font.family: Theme.font; font.pixelSize: Theme.small }
+                        Text { visible: !!row.modelData.group; text: row.modelData.group || ""; color: Theme.muted; font.family: Theme.font; font.pixelSize: Theme.small }
+                        // ↵ on the selection, otherwise the Alt+N position.
+                        Text {
+                            Layout.preferredWidth: 14
+                            horizontalAlignment: Text.AlignRight
+                            text: row.index === window.state.selectedIndex ? "↵" : row.hint >= 1 && row.hint <= 9 && !window.state.helpMode ? String(row.hint) : ""
+                            color: row.index === window.state.selectedIndex ? Theme.accent : Theme.muted
+                            font.family: Theme.font; font.pixelSize: Theme.small
+                        }
                     }
                     MouseArea {
                         anchors.fill: parent
@@ -327,7 +405,7 @@ Item {
             }
             Rectangle {
                 id: status
-                visible: !window.state.prompt && (!!window.state.message || window.state.loading || (window.state.rows.length === 0 && (window.state.query.length > 0 || window.state.modeId !== "apps" || window.state.pickingMode)))
+                visible: !window.state.prompt && (!!window.state.message || window.state.loading || (window.state.rows.length === 0 && (window.state.query.length > 0 || window.state.modeId !== "apps" || window.state.pickingMode || window.state.helpMode)))
                 Layout.fillWidth: true
                 implicitHeight: visible ? statusRow.implicitHeight + 24 : 0
                 color: Theme.surface
@@ -336,7 +414,7 @@ Item {
                     anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; margins: 16 }
                     Text {
                         Layout.fillWidth: true
-                        text: window.state.loading ? "Working…" : window.state.message || (window.state.completingMode ? "No matching mode" : window.notificationList ? (window.state.query.trim() ? "No matching notifications" : "No notifications") : window.state.modeId === "github" && !window.state.query ? "Type to search GitHub." : "No results")
+                        text: window.state.loading ? "Working…" : window.state.message || (window.state.helpMode ? "No matching shortcuts" : window.state.completingMode ? "No matching mode" : window.notificationList ? (window.state.query.trim() ? "No matching notifications" : "No notifications") : window.state.modeId === "github" && !window.state.query ? "Type to search GitHub." : "No results")
                         color: window.state.pluginError ? Theme.danger : Theme.muted
                         font.family: Theme.font; font.pixelSize: 12
                         wrapMode: Text.Wrap
@@ -344,7 +422,14 @@ Item {
                         elide: Text.ElideRight
                         textFormat: Text.PlainText
                     }
-                    ActionButton { text: "Retry"; visible: !!window.state.pluginError; onClicked: window.state.retry() }
+                    ActionButton {
+                        id: retryButton
+                        text: "Retry (Ctrl+R)"
+                        visible: !!window.state.pluginError
+                        onClicked: window.state.retry()
+                        Keys.onTabPressed: window.focusAdjacent("retry", 1)
+                        Keys.onBacktabPressed: window.focusAdjacent("retry", -1)
+                    }
                 }
             }
             Rectangle {
@@ -355,21 +440,43 @@ Item {
                     anchors { fill: parent; leftMargin: 18; rightMargin: 16 }
                     Text { text: "BORON"; color: Theme.accent; font.family: Theme.font; font.pixelSize: 10; font.letterSpacing: 2 }
                     Item { Layout.fillWidth: true }
-                    Text { Layout.fillWidth: true; horizontalAlignment: Text.AlignRight; elide: Text.ElideRight; text: window.state.completingMode ? "↑↓ Suggestions   Tab / ↵ Select mode   Esc Clear" : "↑↓ Navigate   ↵ Open   Ctrl+K Actions   Esc Back"; color: Theme.muted; font.family: Theme.font; font.pixelSize: 10 }
+                    Text { Layout.fillWidth: true; horizontalAlignment: Text.AlignRight; elide: Text.ElideRight; text: window.footerHints; color: Theme.muted; font.family: Theme.font; font.pixelSize: 10 }
                 }
             }
         }
     }
     Shortcut { sequence: "Escape"; enabled: window.visible; onActivated: window.state.goBack() }
-    Shortcut { sequence: "Ctrl+N"; enabled: window.visible && !window.state.prompt; onActivated: window.state.move(1) }
-    Shortcut { sequence: "Ctrl+P"; enabled: window.visible && !window.state.prompt; onActivated: window.state.move(-1) }
+    Shortcut { sequences: ["Ctrl+W", "Shift+Escape"]; enabled: window.visible; onActivated: window.state.close() }
+    Shortcut { sequences: ["Ctrl+/", "F1"]; enabled: window.visible && !window.state.prompt; onActivated: window.state.showHelp() }
+    Shortcut { sequences: ["Ctrl+N", "Alt+J"]; enabled: window.visible && !window.state.prompt; onActivated: window.state.move(1) }
+    Shortcut { sequences: ["Ctrl+P", "Alt+K"]; enabled: window.visible && !window.state.prompt; onActivated: window.state.move(-1) }
     Shortcut { sequence: "Ctrl+K"; enabled: window.visible && !window.state.prompt; onActivated: window.state.showActions() }
     Shortcut { sequence: "Ctrl+Q"; enabled: window.visible && window.state.canQuitTray; onActivated: window.state.quitTray() }
     Shortcut { sequence: "Ctrl+M"; enabled: window.visible && !window.state.prompt; onActivated: window.state.showModes() }
-    Shortcut { sequence: "Ctrl+Tab"; enabled: window.visible && !window.state.prompt && !window.state.actionRunning; onActivated: { if (window.deviceNavigation) window.switchDeviceTab(1); else window.state.cycle(1); } }
-    Shortcut { sequence: "Ctrl+Shift+Tab"; enabled: window.visible && !window.state.prompt && !window.state.actionRunning; onActivated: { if (window.deviceNavigation) window.switchDeviceTab(-1); else window.state.cycle(-1); } }
+    Shortcut { sequence: "Ctrl+D"; enabled: window.visible && window.state.canDismiss; onActivated: window.state.dismissSelected() }
+    Shortcut { sequence: "Ctrl+Shift+D"; enabled: window.visible && window.state.modeId === "notifications" && window.state.browsing; onActivated: window.state.clearNotifications() }
+    Shortcut { sequence: "Ctrl+R"; enabled: window.visible && !window.state.prompt && !!window.state.pluginError; onActivated: window.state.retry() }
+    Shortcut { sequence: "Ctrl+Tab"; enabled: window.visible && !window.state.prompt && !window.state.actionRunning; onActivated: { if (window.listNavigation && window.state.filters.length) window.switchFilterTab(1); else window.state.cycle(1); } }
+    Shortcut { sequence: "Ctrl+Shift+Tab"; enabled: window.visible && !window.state.prompt && !window.state.actionRunning; onActivated: { if (window.listNavigation && window.state.filters.length) window.switchFilterTab(-1); else window.state.cycle(-1); } }
     Shortcut { sequence: "Ctrl+PgDown"; enabled: window.visible && !window.state.prompt && !window.state.actionRunning; onActivated: window.state.cycle(1) }
     Shortcut { sequence: "Ctrl+PgUp"; enabled: window.visible && !window.state.prompt && !window.state.actionRunning; onActivated: window.state.cycle(-1) }
-    Shortcut { sequence: "Alt+Left"; enabled: window.visible && window.deviceNavigation; onActivated: window.switchDeviceTab(-1) }
-    Shortcut { sequence: "Alt+Right"; enabled: window.visible && window.deviceNavigation; onActivated: window.switchDeviceTab(1) }
+    Shortcut { sequence: "Alt+Left"; enabled: window.visible && window.listNavigation && window.state.filters.length > 0; onActivated: window.switchFilterTab(-1) }
+    Shortcut { sequence: "Alt+Right"; enabled: window.visible && window.listNavigation && window.state.filters.length > 0; onActivated: window.switchFilterTab(1) }
+    // Alt+N runs the Nth visible row; Ctrl+N switches to the Nth mode.
+    Repeater {
+        model: 9
+        Item {
+            required property int index
+            Shortcut {
+                sequence: "Alt+" + (index + 1)
+                enabled: window.visible && !window.state.prompt && !window.state.helpMode && !window.state.actionRunning
+                onActivated: window.activateVisible(index)
+            }
+            Shortcut {
+                sequence: "Ctrl+" + (index + 1)
+                enabled: window.visible && !window.state.prompt && !window.state.actionRunning && index < window.state.modes.length
+                onActivated: window.state.switchModeIndex(index)
+            }
+        }
+    }
 }

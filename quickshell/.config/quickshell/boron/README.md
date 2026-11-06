@@ -51,18 +51,34 @@ the IPC command. The implementation does not change your Niri configuration.
 
 ## Controls
 
+Everything works from the keyboard. Press **Ctrl+/** (or **F1**) inside Boron for a
+searchable list of the keys available in the current mode.
+
 | Key | Action |
 |---|---|
-| Up/Down, Ctrl+P/N | Select a result |
+| Up/Down, Ctrl+N/P, Alt+J/K | Select a result |
 | Enter | Default action |
+| Shift+Enter | Secondary action (shown in the footer, e.g. a desktop action or Show menu) |
+| Alt+1–9 | Run the Nth visible result (rows show their number) |
 | Ctrl+K, right-click | Additional actions |
-| Ctrl+Q | Confirm quitting the selected tray app (System Tray only) |
-| Ctrl+M, mode button | Searchable mode picker |
-| Ctrl+Tab / Ctrl+Shift+Tab | Next / previous device tab in Devices; next / previous mode elsewhere |
+| Page Up / Page Down | Move by a page |
+| Home / End | First / last result while the search is empty |
+| Ctrl+1–9 | Switch to the Nth mode (Applications, System Tray, Devices, Notifications, then plugins) |
+| Ctrl+M, mode button | Searchable mode picker (lists the Ctrl+N number of each mode) |
+| Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab in modes with tabs (Devices, GitHub); next / previous mode elsewhere |
+| Alt+Left / Alt+Right | Previous / next tab in modes with tabs |
 | Ctrl+PageDown / Ctrl+PageUp | Next / previous launcher mode from any mode |
-| Alt+Left / Alt+Right | Previous / next Wi-Fi or Bluetooth tab in Devices |
-| Tab / Shift+Tab | Move through controls and forms |
-| Escape | Dismiss prompt/actions, clear search, then close |
+| Ctrl+Q | Confirm quitting the selected tray app (System Tray only) |
+| Ctrl+D, Delete in results | Dismiss the selected notification; remove an app from Recent |
+| Ctrl+Shift+D | Clear all notifications (asks first) |
+| Ctrl+R | Retry after a plugin error |
+| Tab / Shift+Tab | Move through search, tabs, results, toolbar buttons and the mode button |
+| Backspace on empty search | Go up one level: help, actions, tray submenu, mode picker, then back to Applications |
+| Left / Right on empty search | Leave / open a tray menu (System Tray only) |
+| Ctrl+Enter | Submit a form or confirmation from any field |
+| Left / Right on prompt buttons | Move between Cancel and Confirm; Enter or Space presses the focused button |
+| Escape | Dismiss prompt/actions/help, clear search, then close |
+| Ctrl+W, Shift+Escape | Close immediately from any depth |
 | Click outside | Close |
 
 Type `@apps `, `@tray `, `@devices `, `@notifications `, or `@github ` to switch modes.
@@ -74,19 +90,23 @@ and aliases appear automatically; completion does not send queries to plugins.
 Full prefixes are also consumed when followed by a space, preserving any search
 text after them (for example, `@wifi office`). Opening the launcher
 always starts in Applications. Searching does not contact other modes.
+Typing new search text always selects the best match.
 
-In Devices, Tab moves through **search → active tab → results → mode button**;
-Shift+Tab reverses that order. While a tab is focused, Left/Right switches tabs
-with wrapping, Home/End selects the first/last tab, and Down, Enter, or Space
-enters the results without activating a device. Up or Shift+Tab returns to search.
-The active tab has an underline; keyboard focus adds an outer border.
+In every mode, Tab moves through **search → tabs (if any) → results → toolbar
+buttons (Clear all, Retry) → mode button**; Shift+Tab reverses that order. While a
+tab is focused, Left/Right switches tabs with wrapping, Home/End selects the
+first/last tab, and Down, Enter, or Space enters the results without activating
+anything. Up or Shift+Tab returns to search. The active tab has an underline;
+keyboard focus adds an outer border.
 
 Within focused results, Up/Down selects a row, Enter runs its action, Home/End
 selects the first/last row, and PageUp/PageDown moves by a visible page. Up from
-the first result returns to the tabs. Typing from tabs or results resumes search.
-Ctrl+Tab and Alt+Left/Right retain the current focus area. Switching tabs clears
-the search and starts the new list at the top. These shortcuts are inactive while
-a confirmation or password prompt is open.
+the first result returns to the tabs (or search). Typing from tabs or results
+resumes search. Ctrl+Tab and Alt+Left/Right retain the current focus area.
+Switching tabs clears the search and starts the new list at the top. These
+shortcuts are inactive while a confirmation or password prompt is open.
+
+The footer always shows the keys that apply to the current selection.
 
 The panel appears on Niri's focused output, with a first-screen fallback if Niri
 is unavailable. It fits the output and shows up to eight rows before scrolling.
@@ -94,7 +114,12 @@ is unavailable. It fits the output and shows up to eight rows before scrolling.
 ## Modes
 
 - **Applications:** desktop-entry name/keyword search, fuzzy matching, desktop
-  actions, and terminal application support through Kitty.
+  actions, and terminal application support through Kitty. With an empty search
+  the list shows up to eight **Recent** apps ranked by frecency (launch count with
+  a one-week half-life), so Mod+Space then Enter relaunches your latest app.
+  Frequently used apps also rank slightly higher in search. History lives in
+  `$XDG_STATE_HOME/boron/history.json` (default `~/.local/state`); remove an
+  entry with Ctrl+D or **Remove from recent**, or delete the file to reset it.
 - **System Tray:** live tray entries, nested application menus, and Sleep,
   Restart, and Shutdown. Ctrl+Q finds the selected app's enabled Quit/Exit menu
   command and asks for confirmation; it also works from the app's additional
@@ -206,7 +231,7 @@ submitted merge; its completion is shown when you next open the launcher.
 
 ```text
 shell.qml                   Composition and launcher IPC
-core/                       Pure matching/routing functions
+core/                       Pure matching, routing and frecency functions
 theme/                      Shared BLACKOUT tokens
 components/                 Presentation primitives
 features/
@@ -232,6 +257,7 @@ These tests never contact GitHub or perform power/device actions:
 ```sh
 python3 -m unittest discover -s tests -v
 node tests/test_search.cjs
+node tests/test_frecency.cjs
 QT_QPA_PLATFORM=offscreen qs -p smoke.qml --no-color
 QT_QPA_PLATFORM=offscreen qs -p scroll-smoke.qml --no-color
 QT_QPA_PLATFORM=offscreen qs -p navigation-smoke.qml --no-color

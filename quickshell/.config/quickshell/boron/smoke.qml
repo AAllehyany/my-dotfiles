@@ -5,7 +5,7 @@ import Quickshell.Networking
 import "features/launcher"
 
 ShellRoot {
-    LauncherState { id: state }
+    LauncherState { id: state; historyPath: "" }
     QtObject {
         id: network
         property string name: "Test network"
@@ -25,6 +25,21 @@ ShellRoot {
         interval: 500; running: true
         onTriggered: {
             check(state.modeId === "apps" && state.rows.length === 0, "compact application state");
+            // In-memory launch history: nothing is executed or written to disk.
+            const apps = state.adapter;
+            if (apps.entries.length > 1) {
+                apps.history.record(apps.entries[1].id);
+                apps.history.record(apps.entries[1].id);
+                apps.history.record(apps.entries[0].id);
+                check(state.rows.length === 2 && state.rows[0].id === apps.entries[1].id && state.rows[0].recent && state.rows[0].group === "Recent", "frecent apps fill the empty query");
+                check(state.rows[0].actions.some(a => a.id === "forget" && a.menuOnly), "recent rows can be forgotten from actions");
+                check(!state.secondaryAction || state.secondaryAction.id !== "forget", "forget is never the Shift+Enter action");
+                state.selectResult(0);
+                state.dismissSelected();
+                check(state.rows.length === 1 && state.rows[0].id === apps.entries[0].id, "Ctrl+D removes an app from recent");
+                apps.history.forget(apps.entries[0].id);
+                check(state.rows.length === 0, "empty history restores the compact state");
+            } else console.warn("SMOKE: fewer than two desktop entries; frecency checks skipped");
             state.setQuery("@");
             check(state.completingMode && state.rows.some(r => r.title === "@wifi") && state.rows.some(r => r.title === "@bluetooth"), "at-sign shows device completions");
             state.setQuery("@WI");
@@ -66,22 +81,22 @@ ShellRoot {
             state.chooseFilter("not-a-section");
             check(state.activeFilter === "wifi", "invalid device tab ignored");
             state.setQuery("network");
-            state.cycleDeviceTab(1);
+            state.cycleFilter(1);
             check(state.modeId === "devices" && state.activeFilter === "bluetooth" && state.query === "", "keyboard switches device tabs and clears search");
-            state.cycleDeviceTab(1);
+            state.cycleFilter(1);
             check(state.activeFilter === "wifi", "next device tab wraps");
-            state.cycleDeviceTab(-1);
+            state.cycleFilter(-1);
             check(state.activeFilter === "bluetooth", "previous device tab wraps");
             state.prompt = {title: "Pairing confirmation", fields: []};
-            state.cycleDeviceTab(1);
+            state.cycleFilter(1);
             check(state.activeFilter === "bluetooth", "tab shortcuts do not dismiss prompts");
             state.prompt = null;
             state.showModes();
-            state.cycleDeviceTab(1);
+            state.cycleFilter(1);
             check(state.activeFilter === "bluetooth", "tab shortcuts do not act inside mode picker");
             state.goBack();
             state.switchMode("tray", "");
-            state.cycleDeviceTab(1);
+            state.cycleFilter(1);
             check(state.modeId === "tray", "device tab shortcut does not switch launcher modes");
             const restart = state.rows.findIndex(r => r.id === "restart");
             state.activate(restart);

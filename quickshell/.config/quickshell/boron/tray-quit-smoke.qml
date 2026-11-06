@@ -8,7 +8,7 @@ ShellRoot {
     property int step: 0
     property int waited: 0
     property var disposable: null
-    LauncherState { id: state } // closed: no desktop scans or remote queries
+    LauncherState { id: state; historyPath: "" } // closed: no desktop scans or remote queries
     FixtureTray { id: app }
     FixtureTray { id: otherApp; title: "Other" }
     QtObject {

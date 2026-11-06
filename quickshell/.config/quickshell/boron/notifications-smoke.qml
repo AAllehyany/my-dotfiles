@@ -22,7 +22,7 @@ ShellRoot {
         screens: [{name: "left", width: 1920, height: 1080}, {name: "right", width: 1280, height: 720}]
         centerVisible: state.notificationCenterVisible
     }
-    LauncherState { id: state; notificationService: service }
+    LauncherState { id: state; historyPath: ""; notificationService: service }
     Component { id: fixture; FixtureNotification {} }
     QtObject {
         id: defaultAction
@@ -156,6 +156,18 @@ ShellRoot {
                 service.receive(pendingTransient);
                 state.switchMode("notifications", "");
                 check(pendingTransient.expired && !service.find(pendingTransient.id), "opening center cleans up a transient waiting for output resolution");
+                make({summary: "Keep me"}); make({summary: "Dismiss me"});
+                state.selectResult(0);
+                check(state.canDismiss && state.selectedRow.title === "Dismiss me", "newest notification selected");
+                check(events.keyClick(Qt.Key_D, Qt.ControlModifier, 0), "Ctrl+D delivered");
+                check(service.history.length === 1 && service.history[0].title === "Keep me", "Ctrl+D dismisses the selected notification");
+                check(events.keyClick(Qt.Key_D, Qt.ControlModifier | Qt.ShiftModifier, 0), "Ctrl+Shift+D delivered");
+                check(state.prompt && state.prompt.destructive && service.history.length === 1, "Ctrl+Shift+D asks before clearing");
+                state.goBack();
+                check(!state.prompt && service.history.length === 1, "canceling keeps history");
+                state.clearNotifications();
+                state.submit({});
+                check(!service.history.length && state.modeId === "notifications", "confirmed clear removes history");
                 console.warn("NOTIFICATIONS SMOKE PASSED"); Qt.quit();
             }
             }

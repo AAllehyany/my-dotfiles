@@ -10,12 +10,19 @@ ShellRoot {
     property int step: 0
     property string previousTab: ""
     property int activations: 0
+    property int forgets: 0
+    property int baseline: 0
     QtObject {
         id: fixtureNetwork
         readonly property bool connected: true
         function disconnect() { test.activations++; }
+        function forget() { test.forgets++; }
     }
-    LauncherState { id: state } // closed: no device scans or remote queries
+    function deviceRows() {
+        return Array.from({length: 20}, (_, i) => ({id: "fixture:" + i, title: "Device " + i, subtitle: "Fixture only", network: fixtureNetwork,
+            actions: [{id: "connect", title: "Disconnect"}, {id: "forget", title: "Forget fixture"}]}));
+    }
+    LauncherState { id: state; historyPath: "" } // closed: no device scans or remote queries
     FixtureTray { id: fixtureTray }
     FixtureTray { id: secondTray; title: "Second" }
     Window {
@@ -41,7 +48,7 @@ ShellRoot {
         if (!condition) { steps.stop(); throw new Error("NAVIGATION SMOKE FAILED at " + step + ": " + message); }
     }
     function press(key, modifiers) { check(keys.keyClick(key, modifiers || Qt.NoModifier, 0), "key delivered"); }
-    function tabFocused(id) { return find(view, "deviceTab-" + id).activeFocus; }
+    function tabFocused(id) { return find(view, "filterTab-" + id).activeFocus; }
     Timer {
         id: steps
         interval: 100; running: true; repeat: true
@@ -109,7 +116,7 @@ ShellRoot {
             case 44:
                 check(state.selectedIndex > 0, "PageDown advances results");
                 test.previousTab = state.activeFilter;
-                const target = find(view, "deviceTab-" + (state.activeFilter === "wifi" ? "bluetooth" : "wifi"));
+                const target = find(view, "filterTab-" + (state.activeFilter === "wifi" ? "bluetooth" : "wifi"));
                 check(keys.mouseClick(target, target.width / 2, target.height / 2, Qt.LeftButton, Qt.NoModifier, 0), "mouse click delivered");
                 break;
             case 45:
@@ -218,6 +225,100 @@ ShellRoot {
                 break;
             case 73:
                 check(!state.loading && !state.prompt && !state.adapter.quitLookup.openers.length, "Escape cancels pending lookup and repeated Ctrl+Q cannot duplicate it");
+                state.switchMode("devices", "wifi");
+                state.adapter.results = test.deviceRows();
+                break;
+            case 74:
+                check(search.activeFocus, "search focused for keyboard extensions");
+                state.selectResult(5);
+                keys.keyClickChar("d", Qt.NoModifier, 0);
+                break;
+            case 75:
+                check(state.query === "d" && state.selectedIndex === 0, "typing selects the first result; index=" + state.selectedIndex);
+                press(Qt.Key_Backspace);
+                break;
+            case 76:
+                check(state.query === "" && state.modeId === "devices", "Backspace with text edits the query only");
+                test.baseline = test.activations;
+                press(Qt.Key_3, Qt.AltModifier);
+                break;
+            case 77:
+                check(test.activations === test.baseline + 1 && state.selectedIndex === 0, "Alt+3 runs the third visible row");
+                press(Qt.Key_J, Qt.AltModifier); press(Qt.Key_J, Qt.AltModifier); press(Qt.Key_K, Qt.AltModifier);
+                break;
+            case 78:
+                check(state.selectedIndex === 1, "Alt+J / Alt+K move the selection");
+                check(state.secondaryAction && state.secondaryAction.id === "forget", "secondary action is the second action");
+                press(Qt.Key_Return, Qt.ShiftModifier);
+                break;
+            case 79:
+                check(state.prompt && state.prompt.title === "Forget Device 1?", "Shift+Enter runs the secondary action");
+                check(host.activeFocusItem.objectName === "promptCancel", "destructive prompt focuses Cancel");
+                press(Qt.Key_Return);
+                break;
+            case 80:
+                check(!state.prompt && test.forgets === 0 && search.activeFocus, "Enter on a focused Cancel button cancels");
+                press(Qt.Key_Return, Qt.ShiftModifier);
+                break;
+            case 81: press(Qt.Key_Right); break;
+            case 82: check(host.activeFocusItem.objectName === "promptConfirm", "Right moves to Confirm"); press(Qt.Key_Left); break;
+            case 83: check(host.activeFocusItem.objectName === "promptCancel", "Left moves back to Cancel"); press(Qt.Key_Return, Qt.ControlModifier); break;
+            case 84:
+                check(!state.prompt && test.forgets === 1, "Ctrl+Enter submits the prompt");
+                state.adapter.results = test.deviceRows();
+                press(Qt.Key_PageDown);
+                break;
+            case 85: check(state.selectedIndex > 1, "PageDown pages from search"); press(Qt.Key_End); break;
+            case 86: check(state.selectedIndex === state.rows.length - 1, "End on empty search selects last"); press(Qt.Key_Home); break;
+            case 87:
+                check(state.selectedIndex === 0, "Home on empty search selects first");
+                state.switchMode("tray", "");
+                state.adapter.items = [fixtureTray, secondTray];
+                break;
+            case 88: press(Qt.Key_Tab); break;
+            case 89: check(results.activeFocus, "Tab enters results outside Devices"); press(Qt.Key_Down); break;
+            case 90: check(state.selectedIndex === 1 && results.activeFocus, "arrows navigate results outside Devices"); press(Qt.Key_Tab); break;
+            case 91: check(find(view, "launcherModeButton").activeFocus, "Tab from results reaches mode button"); press(Qt.Key_Tab); break;
+            case 92:
+                check(search.activeFocus, "focus loop returns to search outside Devices");
+                state.adapter.menuStack = [null];
+                press(Qt.Key_Left);
+                break;
+            case 93: check(state.modeId === "tray" && !state.adapter.menuStack.length, "Left on empty search leaves a tray menu"); press(Qt.Key_Backspace); break;
+            case 94: check(state.modeId === "apps" && search.activeFocus, "Backspace on empty search returns to Applications"); press(Qt.Key_3, Qt.ControlModifier); break;
+            case 95: check(state.modeId === "devices", "Ctrl+3 switches to the third mode"); press(Qt.Key_1, Qt.ControlModifier); break;
+            case 96: check(state.modeId === "apps", "Ctrl+1 switches to Applications"); press(Qt.Key_M, Qt.ControlModifier); break;
+            case 97:
+                check(state.pickingMode && state.rows[2].id === "devices" && state.rows[2].subtitle.indexOf("Ctrl+3") >= 0, "picker lists modes in order with Ctrl+N hints");
+                press(Qt.Key_Backspace);
+                break;
+            case 98: check(!state.pickingMode && state.modeId === "apps", "Backspace on empty search leaves the picker"); press(Qt.Key_Slash, Qt.ControlModifier); break;
+            case 99:
+                check(state.helpMode && state.rows.length > 5 && state.rows.some(r => r.title === "Alt+1–9"), "Ctrl+/ shows keyboard help");
+                for (const c of "close") keys.keyClickChar(c, Qt.NoModifier, 0);
+                break;
+            case 100:
+                check(state.helpMode && state.rows.length && state.rows[0].title.indexOf("Ctrl+W") >= 0, "help is searchable; first=" + (state.rows[0] || {}).title);
+                press(Qt.Key_Return);
+                break;
+            case 101: check(state.helpMode, "help rows are inert"); press(Qt.Key_Escape); break;
+            case 102: check(!state.helpMode, "Escape closes help"); press(Qt.Key_F1); break;
+            case 103:
+                check(state.helpMode, "F1 opens help");
+                press(Qt.Key_F1);
+                state.switchMode("fixture-plugin", "");
+                state.adapter.filters = [{id: "a", label: "A"}, {id: "b", label: "B"}];
+                break;
+            case 104: check(!state.helpMode && state.filters.length === 2, "plugin filters visible"); press(Qt.Key_Tab, Qt.ControlModifier); break;
+            case 105: check(state.activeFilter === "b" && state.modeId === "fixture-plugin", "Ctrl+Tab cycles plugin filters"); press(Qt.Key_Tab); break;
+            case 106:
+                check(tabFocused("b"), "Tab reaches plugin filter tabs");
+                state.switchMode("apps", "");
+                state.prompt = {title: "Fixture prompt", fields: []};
+                break;
+            case 107: press(Qt.Key_W, Qt.ControlModifier); break;
+            case 108:
+                check(!state.prompt && !state.opened, "Ctrl+W closes from inside a prompt");
                 console.warn("NAVIGATION SMOKE PASSED"); Qt.quit();
             }
         }

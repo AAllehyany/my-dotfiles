@@ -18,7 +18,7 @@ Item {
         actions: [{id: "default", title: "Open / dismiss"}].concat(Array.from(entry.actions)
             .filter(action => action.identifier !== "default" && action.identifier !== "inline-reply")
             .map(action => ({id: "app:" + action.identifier, title: action.text || action.identifier})))
-            .concat([{id: "dismiss", title: "Dismiss"}])
+            .concat([{id: "dismiss", title: "Dismiss", menuOnly: true}])
     }))
     signal closeRequested()
     signal notice(string message)
@@ -28,8 +28,16 @@ Item {
         if (icon.startsWith("/") || icon.includes(":")) return icon;
         return Quickshell.iconPath(icon, true);
     }
+    function dismiss(row) { if (service && row) service.dismiss(row.id); }
+    function requestClear() {
+        if (!service || !service.history.length) return;
+        const count = service.history.length;
+        promptRequested({title: "Clear all notifications?", description: "Removes " + count + (count === 1 ? " notification" : " notifications") + " from history, including entries hidden by search.",
+            submitLabel: "Clear all", destructive: true, fields: [], row: {id: "clear"}, action: "clear"});
+    }
     function activate(row, action, values) {
         if (!service) return;
+        if (action === "clear") { if (values && values.confirmed) service.clear(); return; }
         if (action === "dismiss") service.dismiss(row.id);
         else service.activate(row.id, action.startsWith("app:") ? action.slice(4) : "default");
     }
