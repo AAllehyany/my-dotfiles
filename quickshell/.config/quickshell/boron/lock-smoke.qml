@@ -118,9 +118,10 @@ ShellRoot {
                 break;
             case 40:
                 check(state.shackleOpen && state.fade === 0 && state.glitch === 0, "clean icon, shackle open, faded");
+                check(state.reveal === 1, "blur cleared");
                 check(test.unlocks === 1, "unlocked once");
                 state.reset();
-                check(state.phase === "idle" && !state.shackleOpen && state.fade === 1, "reset for the next lock");
+                check(state.phase === "idle" && !state.shackleOpen && state.fade === 1 && state.reveal === 0, "reset for the next lock");
                 console.warn("LOCK SMOKE PASSED");
                 Qt.quit();
             }

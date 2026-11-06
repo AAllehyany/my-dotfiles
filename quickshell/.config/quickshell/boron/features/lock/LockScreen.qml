@@ -8,6 +8,7 @@ Item {
     required property var state
     property string screenName: ""
     property string wallpaper: ""
+    property string snapshot: ""
     readonly property bool hasInput: !state.inputScreen || state.inputScreen === screenName
     readonly property real iconSize: Math.min(512, height * 0.47)
 
@@ -15,7 +16,12 @@ Item {
     Keys.onPressed: event => { event.accepted = root.state.handleKey(event); }
     Component.onCompleted: forceActiveFocus()
 
-    BlurredWallpaper { anchors.fill: parent; path: root.wallpaper }
+    Backdrop {
+        anchors.fill: parent
+        snapshot: root.snapshot
+        wallpaper: root.wallpaper
+        clarity: root.state.reveal
+    }
 
     MouseArea {
         anchors.fill: parent

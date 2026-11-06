@@ -2,6 +2,7 @@
 // (type "boron" to see the unlock, anything else to see a failure). Press Escape twice with an empty field to close.
 //   qs -p lock-preview.qml
 // BORON_LOCK_CAPTURE=1 plays a scripted run instead and saves /tmp/boron-lock-*.png frames.
+// The background is a live capture of the first monitor, or BORON_LOCK_SNAPSHOT=<image> (needed offscreen).
 import QtQuick
 import Quickshell
 import QtTest 1.2
@@ -10,6 +11,7 @@ import "features/lock"
 ShellRoot {
     id: preview
     readonly property bool capture: Quickshell.env("BORON_LOCK_CAPTURE") === "1"
+    readonly property string snapshotFile: Quickshell.env("BORON_LOCK_SNAPSHOT") || ""
     property int tick: 0
     property int escapes: 0
 
@@ -27,6 +29,13 @@ ShellRoot {
     }
 
     WallpaperSource { id: wallpaper }
+    // Loaded by path so offscreen runs (no PanelWindow backend) don't fail to load the preview.
+    LazyLoader {
+        id: desktopSnapshot
+        active: !preview.snapshotFile && Quickshell.env("QT_QPA_PLATFORM") !== "offscreen"
+        source: "features/lock/DesktopSnapshot.qml"
+        onItemChanged: if (item) item.capture()
+    }
     LockState {
         id: state
         authenticator: fake
@@ -48,6 +57,9 @@ ShellRoot {
             state: state
             screenName: "preview"
             wallpaper: wallpaper.path
+            snapshot: preview.snapshotFile ? "file://" + preview.snapshotFile
+                : desktopSnapshot.item && Quickshell.screens.length
+                    ? desktopSnapshot.item.frames[Quickshell.screens[0].name] || "" : ""
             Keys.onEscapePressed: event => {
                 if (state.buffer) { state.clear(); preview.escapes = 0; }
                 else if (++preview.escapes >= 2) Qt.quit();
@@ -70,7 +82,9 @@ ShellRoot {
             case 59: preview.save("failed"); break;
             case 100: preview.typeText("boron"); keys.keyClick(Qt.Key_Return, Qt.NoModifier, 0); break;
             case 127: preview.save("unlocking"); break;
-            case 140: console.warn("LOCK PREVIEW SAVED"); Qt.quit();
+            case 133: preview.save("revealing"); break;
+            case 145: preview.save("revealed"); break;
+            case 150: console.warn("LOCK PREVIEW SAVED"); Qt.quit();
             }
         }
     }

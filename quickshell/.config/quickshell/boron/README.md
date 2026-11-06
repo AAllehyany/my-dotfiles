@@ -229,11 +229,17 @@ submitted merge; its completion is shown when you next open the launcher.
 
 ## Lock screen
 
-A 512 px lock that glitches, the date and time in MonoLisa, and a blurred copy of
-the wallpaper swaybg is showing. Every keystroke sends a glitch pulse through the
+A 512 px lock that glitches and the date and time in MonoLisa, over a blurred copy
+of the desktop as it was the moment you locked. Every keystroke sends a glitch pulse through the
 icon, and it keeps glitching while the password is checked. A wrong password
 gives a red burst, the field shakes, and the input clears. The right one settles
-the icon into a clean lock, lifts the shackle, and unlocks.
+the icon into a clean lock, lifts the shackle, and fades it while the blur clears
+back into your desktop, then unlocks.
+
+Just before locking, each monitor is captured with screencopy (about 100 ms).
+The frames stay in memory, are never written to disk, and are dropped a second
+after unlocking. If a monitor can't be captured, its lock shows the blurred swaybg
+wallpaper instead.
 
 ```sh
 tools/lock                       # lock (falls back to swaylock if Boron isn't running)
@@ -261,7 +267,8 @@ the lock, so switch back with Ctrl+Alt+F1 or F2 and unlock with it.
 
 To tune the look without locking anything, run `qs -p lock-preview.qml`. It uses a
 fake password check: type `boron` to see the unlock, anything else for a failure,
-and press Escape twice to close. The glitch is a fragment shader: after editing
+and press Escape twice to close. Its background is a capture of your first monitor,
+or any image with `BORON_LOCK_SNAPSHOT=/path/to/image.png`. The glitch is a fragment shader: after editing
 `features/lock/shaders/glitch.frag`, run `tools/build-shaders.sh` (needs `qsb`
 from `qt6-qtshadertools`).
 
@@ -278,7 +285,7 @@ features/
   launcher/                 Window, state, keyboard policy, forms
   applications/             Desktop-entry integration
   systemtray/               Tray menus and power actions
-  lock/                     Session lock, PAM check, glitch shader
+  lock/                     Session lock, desktop snapshot, PAM check, glitch shader
   devices/                  Network/Bluetooth integration and pairing agent
   plugins/                  Process supervisor, adapter, Python SDK
 plugins/
@@ -313,10 +320,11 @@ handling from a monitor without the field, wrong and right passwords, the
 glitch levels, and the swaybg and focused-output parsing. It never locks the
 session or touches PAM, and it logs `LOCK SMOKE PASSED`. To render the lock
 screen's states to `/tmp/boron-lock-*.png` without a window (GPU rendering, so
-the shader and blur show):
+the shader and blur show; offscreen can't capture the screen, so pass an image
+as the desktop):
 
 ```sh
-QT_QUICK_BACKEND=rhi QSG_RHI_BACKEND=opengl QT_QPA_PLATFORM=offscreen BORON_LOCK_CAPTURE=1 qs -p lock-preview.qml --no-color
+QT_QUICK_BACKEND=rhi QSG_RHI_BACKEND=opengl QT_QPA_PLATFORM=offscreen BORON_LOCK_CAPTURE=1 BORON_LOCK_SNAPSHOT=$HOME/wallpapers/niri/lab.png qs -p lock-preview.qml --no-color
 ```
 
 `smoke.qml` checks QML state transitions and adapters with fixture network data.

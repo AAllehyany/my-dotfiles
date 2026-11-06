@@ -15,6 +15,7 @@ Scope {
     property string inputScreen: ""
     property bool shackleOpen: false
     property real fade: 1
+    property real reveal: 0   // 0 → 1 on unlock: the blurred desktop behind the lock clears
 
     // Glitch: idle shimmer + keystroke pulse + random spikes + checking jitter.
     readonly property real baseline: 0.06
@@ -44,6 +45,7 @@ Scope {
         message = "";
         shackleOpen = false;
         fade = 1;
+        reveal = 0;
         pulse = 0;
         spike = 0;
         checkLevel = 0;
@@ -165,13 +167,16 @@ Scope {
         ScriptAction { script: { if (root.phase === "failed") { root.phase = "idle"; root.message = ""; } } }
     }
 
-    // Correct password: settle to a clean lock, lift the shackle, fade, unlock.
+    // Correct password: settle to a clean lock, lift the shackle, then fade it while the blur clears.
     SequentialAnimation {
         id: unlockSequence
         NumberAnimation { target: root; property: "settleLevel"; to: 0; duration: 260; easing.type: Easing.OutCubic }
         ScriptAction { script: root.shackleOpen = true }
         PauseAnimation { duration: 320 }
-        NumberAnimation { target: root; property: "fade"; to: 0; duration: Theme.motion * 2; easing.type: Easing.InQuad }
+        ParallelAnimation {
+            NumberAnimation { target: root; property: "fade"; to: 0; duration: Theme.motion * 2; easing.type: Easing.InQuad }
+            NumberAnimation { target: root; property: "reveal"; to: 1; duration: 520; easing.type: Easing.OutCubic }
+        }
         ScriptAction { script: root.unlocked() }
     }
 }
