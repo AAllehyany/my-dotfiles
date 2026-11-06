@@ -1,0 +1,36 @@
+-- ---------- core ----------
+vim.opt.number = true
+vim.opt.relativenumber = true
+vim.opt.mouse = "a"
+vim.opt.signcolumn = "yes"
+vim.opt.splitright = true
+vim.opt.splitbelow = true
+vim.opt.scrolloff = 8
+vim.opt.ignorecase = true
+vim.opt.smartcase = true
+vim.opt.undofile = true
+vim.opt.updatetime = 250
+vim.opt.completeopt = { "menuone", "noselect", "popup" }
+
+-- Use macOS/system clipboard
+vim.opt.clipboard = "unnamedplus"
+
+-- ---------- indentation ----------
+vim.opt.tabstop = 2
+vim.opt.shiftwidth = 2
+vim.opt.softtabstop = 2
+vim.opt.expandtab = true
+vim.opt.smartindent = true
+
+-- ---------- UI ----------
+vim.opt.termguicolors = true
+vim.opt.pumblend = 0
+vim.opt.winblend = 0
+vim.o.background = "dark"
+
+-- ---------- filetypes ----------
+vim.filetype.add({
+  extension = {
+    astro = "astro",
+  },
+})
