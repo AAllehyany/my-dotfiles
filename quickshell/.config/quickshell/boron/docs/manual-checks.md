@@ -47,6 +47,11 @@ These checks cover the remaining real-session behavior:
   active toasts. Check expired toasts remain in history, offscreen entries stay
   unread until scrolled into view, arrivals stay in the center while it is open,
   Clear all works during search, and QML reloads do not replay old notifications.
+- Lock with `tools/lock`: a wrong password glitches red, shakes and clears; the
+  right one shows the clean lock, lifts the shackle and unlocks. With two
+  monitors, only the one focused at lock time shows the field, keys typed after
+  clicking elsewhere still land, and clicking a monitor moves the field there.
+  Check the idle lock (10 minutes) and that the lock is up before suspend resumes.
 
 Hardware and authenticated-service checks are intentionally not simulated as
 successful real integrations in the test report.

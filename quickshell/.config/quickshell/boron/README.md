@@ -227,17 +227,58 @@ these states. An interrupted request is not automatically retried. Check GitHub
 if the outcome is uncertain. Closing the launcher does not cancel an already
 submitted merge; its completion is shown when you next open the launcher.
 
+## Lock screen
+
+A 512 px lock that glitches, the date and time in MonoLisa, and a blurred copy of
+the wallpaper swaybg is showing. Every keystroke sends a glitch pulse through the
+icon, and it keeps glitching while the password is checked. A wrong password
+gives a red burst, the field shakes, and the input clears. The right one settles
+the icon into a clean lock, lifts the shackle, and unlocks.
+
+```sh
+tools/lock                       # lock (falls back to swaylock if Boron isn't running)
+qs -c boron ipc call lock lock   # the same, without the fallback
+```
+
+Every monitor shows the lock and the date. Only the monitor that was focused when
+locking shows the password field; click another monitor to move it there. Typing
+works whichever monitor the compositor sends keys to. Escape or Ctrl+U clears the
+field and Ctrl+Backspace deletes it all. The focused monitor comes from `niri msg`
+or `hyprctl`, so the lock works the same on Niri and Hyprland.
+
+There is deliberately no IPC unlock: only the password unlocks. Passwords are
+checked through PAM with `pam/password.conf` (`pam_unix`), so the lock doesn't
+depend on any other locker's PAM file.
+
+In Niri, `Super+Alt+L` and swayidle (after 10 minutes idle and before sleep) call
+`tools/lock`. On Hyprland, use the same script from a bind and from hypridle's `lock_cmd`.
+
+**If the lock ever hangs** (for example, Quickshell crashes while locked), the
+session stays locked rather than opening. Switch to a text console with
+Ctrl+Alt+F3, log in, and run `WAYLAND_DISPLAY=wayland-1 swaylock` (your socket
+name is in `echo $WAYLAND_DISPLAY` from a desktop terminal). Swaylock takes over
+the lock, so switch back with Ctrl+Alt+F1 or F2 and unlock with it.
+
+To tune the look without locking anything, run `qs -p lock-preview.qml`. It uses a
+fake password check: type `boron` to see the unlock, anything else for a failure,
+and press Escape twice to close. The glitch is a fragment shader: after editing
+`features/lock/shaders/glitch.frag`, run `tools/build-shaders.sh` (needs `qsb`
+from `qt6-qtshadertools`).
+
 ## Organization
 
 ```text
-shell.qml                   Composition and launcher IPC
-core/                       Pure matching, routing and frecency functions
+shell.qml                   Composition, launcher and lock IPC
+core/                       Pure matching, routing and frecency functions; focused-output lookup
+pam/                        PAM config for the lock screen
+tools/                      Lock command and shader build script
 theme/                      Shared BLACKOUT tokens
 components/                 Presentation primitives
 features/
   launcher/                 Window, state, keyboard policy, forms
   applications/             Desktop-entry integration
   systemtray/               Tray menus and power actions
+  lock/                     Session lock, PAM check, glitch shader
   devices/                  Network/Bluetooth integration and pairing agent
   plugins/                  Process supervisor, adapter, Python SDK
 plugins/
@@ -263,7 +304,19 @@ QT_QPA_PLATFORM=offscreen qs -p scroll-smoke.qml --no-color
 QT_QPA_PLATFORM=offscreen qs -p navigation-smoke.qml --no-color
 QT_QPA_PLATFORM=offscreen qs -p tray-quit-smoke.qml --no-color
 QT_QPA_PLATFORM=offscreen qs -p notifications-smoke.qml --no-color
+QT_QPA_PLATFORM=offscreen qs -p lock-smoke.qml --no-color
 python3 tests/test_notifications_bus.py
+```
+
+`lock-smoke.qml` drives the lock screen's state with a fake password check: key
+handling from a monitor without the field, wrong and right passwords, the
+glitch levels, and the swaybg and focused-output parsing. It never locks the
+session or touches PAM, and it logs `LOCK SMOKE PASSED`. To render the lock
+screen's states to `/tmp/boron-lock-*.png` without a window (GPU rendering, so
+the shader and blur show):
+
+```sh
+QT_QUICK_BACKEND=rhi QSG_RHI_BACKEND=opengl QT_QPA_PLATFORM=offscreen BORON_LOCK_CAPTURE=1 qs -p lock-preview.qml --no-color
 ```
 
 `smoke.qml` checks QML state transitions and adapters with fixture network data.

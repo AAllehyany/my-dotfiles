@@ -1,0 +1,4 @@
+#!/bin/sh
+# Locks the session with Boron's lock screen; falls back to swaylock if Boron isn't running.
+# Used by the compositor's lock keybind and by swayidle.
+qs -c boron ipc call lock lock >/dev/null 2>&1 || exec swaylock -f

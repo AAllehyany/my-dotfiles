@@ -283,8 +283,8 @@ spawn-sh-at-startup "swaybg -i $HOME/wallpapers/niri/lab.png -m fill"
 spawn-sh-at-startup "$HOME/.local/bin/wob-volume-server"
 // Password prompt for apps that need admin rights.
 spawn-at-startup "/usr/libexec/polkit-mate-authentication-agent-1"
-// Lock after 10 minutes idle and before sleep.
-spawn-sh-at-startup "swayidle -w timeout 600 'swaylock -f' before-sleep 'swaylock -f'"
+// Lock after 10 minutes idle and before sleep (Boron lock screen, swaylock if Boron isn't running).
+spawn-sh-at-startup "swayidle -w timeout 600 '$HOME/.config/quickshell/boron/tools/lock' before-sleep '$HOME/.config/quickshell/boron/tools/lock; sleep 1'"
 // To run a shell command (with variables, pipes, etc.), use spawn-sh-at-startup:
 // spawn-sh-at-startup "qs -c ~/source/qs/MyAwesomeShell"
 
@@ -398,7 +398,7 @@ binds {
     // Suggested binds for running programs: terminal, app launcher, screen locker.
     Mod+T hotkey-overlay-title="Open Kitty" { spawn "kitty"; }
     Mod+D hotkey-overlay-title="Run an Application: fuzzel" { spawn "fuzzel"; }
-    Super+Alt+L hotkey-overlay-title="Lock the Screen: swaylock" { spawn "swaylock"; }
+    Super+Alt+L hotkey-overlay-title="Lock the Screen" { spawn-sh "$HOME/.config/quickshell/boron/tools/lock"; }
 
     // game menu launcher!
     Mod+G hotkey-overlay-title="Open Game Launcher" {
