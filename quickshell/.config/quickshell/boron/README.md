@@ -250,7 +250,7 @@ There is deliberately no IPC unlock: only the password unlocks. Passwords are
 checked through PAM with `pam/password.conf` (`pam_unix`), so the lock doesn't
 depend on any other locker's PAM file.
 
-In Niri, `Super+Alt+L` and swayidle (after 10 minutes idle and before sleep) call
+In Niri, `Super+Alt+L` and swayidle (before sleep; there is no idle timer) call
 `tools/lock`. On Hyprland, use the same script from a bind and from hypridle's `lock_cmd`.
 
 **If the lock ever hangs** (for example, Quickshell crashes while locked), the

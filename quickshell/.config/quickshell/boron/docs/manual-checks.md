@@ -51,7 +51,7 @@ These checks cover the remaining real-session behavior:
   right one shows the clean lock, lifts the shackle and unlocks. With two
   monitors, only the one focused at lock time shows the field, keys typed after
   clicking elsewhere still land, and clicking a monitor moves the field there.
-  Check the idle lock (10 minutes) and that the lock is up before suspend resumes.
+  Check that suspending locks first and that the lock is up before suspend resumes.
 
 Hardware and authenticated-service checks are intentionally not simulated as
 successful real integrations in the test report.
