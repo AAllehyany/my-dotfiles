@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+"""Arrange the focused workspace around a 16:9 game.
+
+    game-layout [FRACTION]      FRACTION of the output width for the game, default 2/3
+
+Run with the game focused:
+- The game goes alone into the first column at FRACTION of the output width and exactly 16:9
+  (2/3 on a 3072x1728 logical output = 2048x1152 = 2560x1440 physical at scale 1.25).
+- If a window already sits under the game in its column, it stays there and fills the strip below.
+  Any other windows in that column move out.
+- Every other window goes into the second column, shown as tabs, filling the remaining width.
+- The strip under the game is handed to Boron's game dock (`qs -c boron ipc call gamedock place ...`),
+  or removed if a window sits there.
+
+Running it again on an arranged workspace changes nothing.
+"""
+
+import json
+import re
+import shutil
+import subprocess
+import sys
+from fractions import Fraction
+from pathlib import Path
+from typing import Any
+
+CONFIG = Path.home() / ".config" / "niri" / "config.kdl"
+DEFAULT_GAPS = 4
+
+
+def run(*args: str, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess:
+    return subprocess.run(args, check=check, text=True, capture_output=capture)
+
+
+def action(*args: str) -> None:
+    run("niri", "msg", "action", *args)
+
+
+def query(what: str) -> Any:
+    data = json.loads(run("niri", "msg", "--json", what, capture=True).stdout)
+    return data.get("Ok", data) if isinstance(data, dict) and "Ok" in data else data
+
+
+def notify(body: str) -> None:
+    if shutil.which("notify-send"):
+        subprocess.run(["notify-send", "Game layout", body], check=False)
+    print(f"game-layout: {body}", file=sys.stderr)
+
+
+def read_gaps() -> int:
+    """`gaps N` from the layout block of the niri config (commented lines ignored)."""
+    try:
+        text = CONFIG.read_text(encoding="utf-8")
+    except OSError:
+        return DEFAULT_GAPS
+    for line in text.splitlines():
+        match = re.match(r"\s*gaps\s+(\d+(?:\.\d+)?)", line)
+        if match:
+            return round(float(match.group(1)))
+    return DEFAULT_GAPS
+
+
+def position(window: dict[str, Any]) -> tuple[int, int]:
+    pos = (window.get("layout") or {}).get("pos_in_scrolling_layout") or [0, 0]
+    return int(pos[0]), int(pos[1])
+
+
+def tiled_on(workspace_id: int) -> list[dict[str, Any]]:
+    return [
+        w for w in query("windows")
+        if w.get("workspace_id") == workspace_id and not w.get("is_floating")
+    ]
+
+
+def column(windows: list[dict[str, Any]], index: int) -> list[dict[str, Any]]:
+    return sorted((w for w in windows if position(w)[0] == index), key=lambda w: position(w)[1])
+
+
+def game_size(output_w: int, output_h: int, gaps: int, fraction: Fraction) -> tuple[int, int]:
+    width = round(output_w * fraction)
+    height = round(Fraction(width) * 9 / 16)
+    max_height = output_h - 2 * gaps
+    if height > max_height:
+        height = max_height
+        width = round(Fraction(height) * 16 / 9)
+    return width, height
+
+
+def dock(*args: str) -> None:
+    # Boron may not be running; the layout still works without the dock.
+    if shutil.which("qs"):
+        run("qs", "-c", "boron", "ipc", "call", "gamedock", *args, check=False, capture=True)
+
+
+def arrange(fraction: Fraction) -> None:
+    game = query("focused-window")
+    if not isinstance(game, dict) or game.get("id") is None:
+        notify("Focus the game window first.")
+        raise SystemExit(1)
+    if game.get("is_floating"):
+        notify("The game window is floating; tile it first (Mod+V).")
+        raise SystemExit(1)
+
+    game_id = game["id"]
+    workspace_id = game["workspace_id"]
+    output = query("focused-output")
+    output_w, output_h = int(output["logical"]["width"]), int(output["logical"]["height"])
+    gaps = read_gaps()
+    game_w, game_h = game_size(output_w, output_h, gaps, fraction)
+
+    # 1. The game's column goes first, with the game on top of it.
+    action("focus-window", "--id", str(game_id))
+    action("move-column-to-index", "1")
+    for _ in range(position(next(w for w in tiled_on(workspace_id) if w["id"] == game_id))[1] - 1):
+        action("move-window-up")
+
+    # 2. Keep at most one window under the game; move the rest out to their own columns.
+    under = [w for w in column(tiled_on(workspace_id), 1) if w["id"] != game_id]
+    for extra in under[1:]:
+        action("focus-window", "--id", str(extra["id"]))
+        action("expel-window-from-column")
+    under_id = under[0]["id"] if under else None
+
+    # 3. Everything else becomes one tabbed column on the right.
+    windows = tiled_on(workspace_id)
+    side = column(windows, 2)
+    if side:
+        action("focus-window", "--id", str(side[0]["id"]))
+        for _ in range(sum(1 for w in windows if position(w)[0] > 2)):
+            action("consume-window-into-column")
+        action("set-column-display", "tabbed")
+        action("set-column-width", str(output_w - game_w - 3 * gaps))
+
+    # 4. Size the game; a window under it takes the rest of the column.
+    action("focus-window", "--id", str(game_id))
+    action("set-column-width", str(game_w))
+    action("set-window-height", "--id", str(game_id), str(game_h))
+    if under_id is not None:
+        action("reset-window-height", "--id", str(under_id))
+    action("focus-column-first")
+
+    # 5. The strip under the game belongs to the dock unless a window sits there.
+    if under_id is not None:
+        dock("remove")
+    else:
+        strip_y = gaps + game_h + gaps
+        dock("place", output["name"], str(workspace_id), str(game_id),
+             str(gaps), str(strip_y), str(game_w), str(output_h - strip_y - gaps))
+
+
+def main() -> None:
+    try:
+        fraction = Fraction(sys.argv[1]) if len(sys.argv) > 1 else Fraction(2, 3)
+        if not 0 < fraction < 1:
+            raise ValueError
+    except ValueError:
+        print(__doc__, file=sys.stderr)
+        raise SystemExit(2)
+
+    try:
+        arrange(fraction)
+    except subprocess.CalledProcessError as error:
+        notify(f"niri command failed: {' '.join(error.cmd)}")
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()

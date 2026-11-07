@@ -256,6 +256,17 @@ layout {
         color "#0007"
     }
 
+    // Tabbed columns (the game layout's side column): the indicator sits inside the column
+    // so it never overlaps the column next to it.
+    tab-indicator {
+        place-within-column
+        hide-when-single-tab
+        width 4
+        gap 4
+        active-color "#8d959f"
+        inactive-color "#505050"
+    }
+
     // Struts shrink the area occupied by windows, similarly to layer-shell panels.
     // You can think of them as a kind of outer gaps. They are set in logical pixels.
     // Left and right struts will cause the next window to the side to always be visible.
@@ -397,12 +408,12 @@ binds {
 
     // Suggested binds for running programs: terminal, app launcher, screen locker.
     Mod+T hotkey-overlay-title="Open Kitty" { spawn "kitty"; }
-    Mod+D hotkey-overlay-title="Run an Application: fuzzel" { spawn "fuzzel"; }
     Super+Alt+L hotkey-overlay-title="Lock the Screen" { spawn-sh "$HOME/.config/quickshell/boron/tools/lock"; }
 
-    // game menu launcher!
-    Mod+G hotkey-overlay-title="Open Game Launcher" {
-        spawn-sh "$HOME/.config/niri/scripts/niri-game-menu";
+    // Game layout: the focused game alone at 2/3 width and exactly 16:9, every other window as tabs
+    // in a column on the right, and Boron's game dock in the strip under the game.
+    Mod+Alt+G hotkey-overlay-title="Game Layout (16:9 + tabbed side)" {
+        spawn-sh "$HOME/.config/niri/scripts/game-layout";
     }
     // Use spawn-sh to run a shell command. Do this if you need pipes, multiple commands, etc.
     // Note: the entire command goes as a single argument. It's passed verbatim to `sh -c`.

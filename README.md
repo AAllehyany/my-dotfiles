@@ -29,9 +29,7 @@ the home directory, so `nvim/.config/nvim` becomes `~/.config/nvim`.
 
   | Script | What it does |
   |---|---|
-  | `niri-game-menu` | `Mod+G`: picks a game from `game-configs.json` with fuzzel and launches it |
-  | `niri-steam-game` | Launches a Steam game by id, then moves and sizes its window on the chosen workspace |
-  | `game-configs.json` | The game list: Steam id, workspace, column width, window title |
+  | `game-layout` | `Mod+Alt+G`: the [game layout](#game-layout): the focused game at 2/3 width and exactly 16:9, everything else as tabs beside it, Boron's game dock under it |
   | `aspect-ratio-script` | `Mod+Alt+0` / `Mod+Alt+Shift+0`: resizes the focused window to 16:9 / 4:3 of its width |
   | `niri-workspace-wallpaper` | Optional daemon that changes the wallpaper per workspace (needs `swww`/`awww`; not started by default) |
 
@@ -39,7 +37,7 @@ the home directory, so `nvim/.config/nvim` becomes `~/.config/nvim`.
 
 | Config | Status | What it is |
 |---|---|---|
-| [`boron/`](quickshell/.config/quickshell/boron) | **In use** | Keyboard-first launcher (apps, files, devices, plugins), notifications, tray and power menu, and the glitch lock screen. Its own [README](quickshell/.config/quickshell/boron/README.md) covers features, IPC, tests and plugins. |
+| [`boron/`](quickshell/.config/quickshell/boron) | **In use** | Keyboard-first launcher (apps, files, devices, plugins), notifications, tray and power menu, the glitch lock screen, and the game dock. Its own [README](quickshell/.config/quickshell/boron/README.md) covers features, IPC, tests and plugins. |
 | `boron-lab/` | Experiment | Scratch copy of the launcher for trying ideas |
 | [`command-center/`](quickshell/.config/quickshell/command-center/README.md) | Experiment | A command-palette shell (UI and state only, no system actions yet) |
 | [`island/`](quickshell/.config/quickshell/island/README.md), `island.backup/` | Experiment | A floating top-center "island" bar |
@@ -78,7 +76,7 @@ are pinned in `nvim-pack-lock.json`.
 ### 1. Dependencies (Fedora)
 
 ```sh
-sudo dnf install stow git niri neovim swaybg swayidle swaylock fuzzel mate-polkit wob \
+sudo dnf install stow git niri neovim swaybg swayidle swaylock mate-polkit wob \
   tree-sitter-cli python3-gobject NetworkManager bluez
 
 # Quickshell 0.3.1 comes from the avengemedia/danklinux COPR
@@ -87,6 +85,10 @@ sudo dnf install quickshell
 
 # Kitty, from the official installer (installs to ~/.local/kitty.app)
 curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin
+
+# OBS, from Flathub. Fedora's obs-studio RPM crashes at startup against Qt 6.11.
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak install flathub com.obsproject.Studio
 ```
 
 Not in this repo, set up separately:
@@ -147,16 +149,37 @@ stow -D -t ~ kitty      # remove a package's links (the repo files stay)
 |---|---|
 | `Mod+Space` | Boron launcher (apps, files, devices, plugins) |
 | `Mod+T` | Kitty |
-| `Mod+D` | fuzzel (plain app launcher) |
-| `Mod+G` | Game menu |
 | `Super+Alt+L` | Lock the screen (Boron lock; falls back to swaylock) |
 | `Mod+1`… | Switch workspace (`focus`, `record`, `code`, `games`) |
+| `Mod+Alt+G` | Game layout (see below) |
 | `Mod+Alt+0` / `Mod+Alt+Shift+0` | Resize window to 16:9 / 4:3 |
 | `Mod+Shift+/` | Niri's list of every key bind |
 
 Neovim: `Space` is the leader. `<leader>ff` finds files, `<leader>fg` greps, `<leader>e` opens
 the file explorer, and `]f` / `]c` / `]a` jump between functions, classes and arguments.
 `af` / `ac` / `aa` select them. The full lists are at the top of `textobjects.lua` and `folds.lua`.
+
+### Game layout
+
+Focus the game (usually on the `games` workspace) and press `Mod+Alt+G`:
+
+```
++--------------------------+-----------+
+|                          |  [tabs]   |   game: alone, 2/3 of the screen width, exactly 16:9
+|   GAME  2560×1440 px     |  every    |         (2048×1152 logical at scale 1.25)
+|                          |  other    |   side: every other window as tabs, full height
++--------------------------+  window   |         (switch tabs with Mod+J / Mod+K)
+|  Boron game dock         |           |   dock: recording / streaming time, now playing,
++--------------------------+-----------+         CPU and GPU load and temperature
+```
+
+- Open windows in any order. Pressing it again changes nothing.
+- To put a window under the game instead of the dock, move it into the game's column (`Mod+Comma`
+  from the game) and press `Mod+Alt+G` again. That window stays and the dock steps aside.
+- Another size: `game-layout 3/4` (the fraction of the screen width; default `2/3`).
+- For pixel-exact games, run them in gamescope at the window's size: `gamescope -W 2560 -H 1440 -- %command%`.
+- The dock's recording status comes from OBS: in OBS, turn on Tools → WebSocket Server Settings →
+  Enable WebSocket server. The dock reads the port and password from OBS's own config.
 
 ## Editing
 
