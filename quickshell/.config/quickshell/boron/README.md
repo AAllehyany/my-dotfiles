@@ -272,10 +272,39 @@ or any image with `BORON_LOCK_SNAPSHOT=/path/to/image.png`. The glitch is a frag
 `features/lock/shaders/glitch.frag`, run `tools/build-shaders.sh` (needs `qsb`
 from `qt6-qtshadertools`).
 
+## Game dock
+
+A panel for the strip under the game in niri's game layout (`niri/scripts/game-layout`, bound to
+`Mod+Alt+G`). It shows:
+- **OBS capture:** a red `REC` with the recording time, `PAUSED`, and a separate `LIVE` badge with the
+  stream time.
+- **Now playing:** the active MPRIS player (Spotify, browsers, …) with previous, play/pause and next buttons.
+- **System:** GPU load, temperature, VRAM, fan and power from `nvidia-smi`, and CPU load (`/proc/stat`)
+  and temperature (`k10temp`).
+
+The layout script places it over IPC, in output-logical pixels:
+
+```sh
+qs -c boron ipc call gamedock place HDMI-A-3 4 77 4 1160 2048 564   # output workspace-id game-id x y w h
+qs -c boron ipc call gamedock remove
+```
+
+These are not named `show`/`hide`, because `qs ipc call gamedock show` parses `show` as the
+`qs ipc show` subcommand. The dock sits on the bottom layer: above the wallpaper, below windows. It only
+appears while its workspace is active on that output, and goes away when the game window closes
+(from `niri msg --json event-stream`).
+Its helpers run only while it's visible.
+
+Recording status comes from obs-websocket, built into OBS 28+. In OBS, turn on Tools → WebSocket
+Server Settings → Enable WebSocket server. `features/gamedock/obs_status.py` (standard library
+only) reads the port and password from OBS's own config, Flatpak or native. If OBS isn't running,
+the dock says `OBS OFFLINE`; other messages are `OBS WEBSOCKET OFF`, `OBS PASSWORD REJECTED` and
+`OBS NOT SET UP`.
+
 ## Organization
 
 ```text
-shell.qml                   Composition, launcher and lock IPC
+shell.qml                   Composition, launcher, lock and game dock IPC
 core/                       Pure matching, routing and frecency functions; focused-output lookup
 pam/                        PAM config for the lock screen
 tools/                      Lock command and shader build script
@@ -286,6 +315,7 @@ features/
   applications/             Desktop-entry integration
   systemtray/               Tray menus and power actions
   lock/                     Session lock, desktop snapshot, PAM check, glitch shader
+  gamedock/                 Game dock: placement, OBS status helper, system stats, view
   devices/                  Network/Bluetooth integration and pairing agent
   plugins/                  Process supervisor, adapter, Python SDK
 plugins/
@@ -312,8 +342,15 @@ QT_QPA_PLATFORM=offscreen qs -p navigation-smoke.qml --no-color
 QT_QPA_PLATFORM=offscreen qs -p tray-quit-smoke.qml --no-color
 QT_QPA_PLATFORM=offscreen qs -p notifications-smoke.qml --no-color
 QT_QPA_PLATFORM=offscreen qs -p lock-smoke.qml --no-color
+QT_QPA_PLATFORM=offscreen qs -p gamedock-smoke.qml --no-color
 python3 tests/test_notifications_bus.py
 ```
+
+`tests/test_obs_status.py` (part of the unittest run) checks the OBS helper's websocket handshake
+and password against a fake obs-websocket server. `gamedock-smoke.qml` checks dock placement and
+visibility from niri event lines, plus the CPU, GPU and recording parsing, and logs
+`GAMEDOCK SMOKE PASSED`. With `BORON_DOCK_CAPTURE=1` and the GPU-rendering variables shown below,
+it also saves `/tmp/boron-gamedock-recording.png` and `-idle.png`.
 
 `lock-smoke.qml` drives the lock screen's state with a fake password check: key
 handling from a monitor without the field, wrong and right passwords, the

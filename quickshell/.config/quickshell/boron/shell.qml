@@ -3,6 +3,7 @@ import Quickshell.Io
 import "features/launcher"
 import "features/notifications"
 import "features/lock"
+import "features/gamedock"
 
 ShellRoot {
     Lock { id: lockScreen }
@@ -21,6 +22,17 @@ ShellRoot {
         function open(): void { state.open(); }
         function close(): void { state.close(); }
         function toggle(): void { state.toggle(); }
+    }
+    DockState { id: dock }
+    GameDock { state: dock }
+    // niri/scripts/game-layout places the dock in the strip under the game (output-logical pixels).
+    IpcHandler {
+        target: "gamedock"
+        // Not named show/hide: `qs ipc call gamedock show` would parse `show` as the `qs ipc show` subcommand.
+        function place(output: string, workspace: int, game: int, x: int, y: int, w: int, h: int): void {
+            dock.show(output, workspace, game, x, y, w, h);
+        }
+        function remove(): void { dock.hide(); }
     }
     IpcHandler {
         target: "notifications"
