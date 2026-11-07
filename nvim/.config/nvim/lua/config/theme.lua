@@ -61,6 +61,11 @@ local function apply_blackout()
     bg = "NONE",
   })
 
+  hi("Folded", {
+    fg = blackout.muted,
+    bg = "NONE",
+  })
+
   hi("LineNr", {
     fg = blackout.dim,
     bg = "NONE",

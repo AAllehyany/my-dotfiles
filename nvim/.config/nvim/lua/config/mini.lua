@@ -51,12 +51,29 @@ require("mini.diff").setup({
   },
 })
 
-require("mini.ai").setup()
+-- mini.ai (with Tree-sitter textobjects) is set up in config/textobjects.lua.
 require("mini.surround").setup()
 local MiniPairs = require("mini.pairs")
 MiniPairs.setup()
 require("mini.comment").setup()
-require("mini.bracketed").setup()
+-- Only the bracket jumps nothing else covers. Functions, classes and arguments use ]f ]c ]a
+-- (config/textobjects.lua); ]b and ]d are mapped in keymaps.lua and lsp.lua.
+require("mini.bracketed").setup({
+  comment    = { suffix = "/" },
+  conflict   = { suffix = "x" },
+  indent     = { suffix = "i" },
+  location   = { suffix = "l" },
+  quickfix   = { suffix = "q" },
+  buffer     = { suffix = "" },
+  diagnostic = { suffix = "" },
+  file       = { suffix = "" },
+  jump       = { suffix = "" },
+  oldfile    = { suffix = "" },
+  treesitter = { suffix = "" },
+  undo       = { suffix = "" },
+  window     = { suffix = "" },
+  yank       = { suffix = "" },
+})
 
 require("mini.snippets").setup({
   mappings = {

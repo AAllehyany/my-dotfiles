@@ -5,5 +5,6 @@ vim.pack.add({
 
   { src = "https://github.com/stevearc/conform.nvim" },
   { src = "https://github.com/arborist-ts/arborist.nvim" },
+  { src = "https://github.com/nvim-treesitter/nvim-treesitter-textobjects", version = "main" },
   { src = "https://github.com/windwp/nvim-ts-autotag" },
 }, { confirm = false })
